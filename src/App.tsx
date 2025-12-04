@@ -468,29 +468,53 @@ function App() {
     }
   }, [currentState.selectedFile, refresh, activeTabId, updateTabState]);
 
-  // Listen for native context menu actions from Tauri
+  // Store handlers in refs to avoid recreating the listener
+  const handlersRef = useRef({
+    handleOpen,
+    handleCut,
+    handleCopy,
+    handlePaste,
+    currentPath: currentState.path
+  });
+
+  // Update refs when handlers change
+  useEffect(() => {
+    handlersRef.current = {
+      handleOpen,
+      handleCut,
+      handleCopy,
+      handlePaste,
+      currentPath: currentState.path
+    };
+  }, [handleOpen, handleCut, handleCopy, handlePaste, currentState.path]);
+
+  // Listen for native context menu actions from Tauri - only register once
   useEffect(() => {
     let unlistenFn: (() => void) | null = null;
+    let mounted = true;
 
     listen<string>('context-menu-action', async (event) => {
+      if (!mounted) return;
+
       const action = event.payload;
       const file = contextFileRef.current;
+      const handlers = handlersRef.current;
 
       console.log('[ContextMenu] Action received:', action, 'File:', file?.name);
 
       switch (action) {
         case 'open':
           console.log('[ContextMenu] Opening file:', file?.path);
-          if (file) handleOpen(file);
+          if (file) handlers.handleOpen(file);
           break;
         case 'cut':
-          if (file) handleCut();
+          if (file) handlers.handleCut();
           break;
         case 'copy':
-          if (file) handleCopy();
+          if (file) handlers.handleCopy();
           break;
         case 'paste':
-          handlePaste();
+          handlers.handlePaste();
           break;
         case 'new_folder':
           setDialog('newFolder');
@@ -503,12 +527,13 @@ function App() {
           break;
         case 'open_terminal':
           try {
-            await invoke('open_in_terminal', { path: file?.is_dir ? file.path : currentState.path });
+            await invoke('open_in_terminal', { path: file?.is_dir ? file.path : handlers.currentPath });
           } catch (err) {
             console.error('Failed to open terminal:', err);
           }
           break;
         case 'properties':
+          console.log('[ContextMenu] Properties for:', file?.path);
           if (file) {
             try {
               await invoke('show_native_properties', { path: file.path });
@@ -518,10 +543,15 @@ function App() {
           }
           break;
       }
-    }).then(fn => { unlistenFn = fn; });
+    }).then(fn => {
+      if (mounted) unlistenFn = fn;
+    });
 
-    return () => { if (unlistenFn) unlistenFn(); };
-  }, [handleOpen, handleCut, handleCopy, handlePaste, currentState.path]);
+    return () => {
+      mounted = false;
+      if (unlistenFn) unlistenFn();
+    };
+  }, []); // Empty deps - only register once
 
   return (
     <div className="h-screen flex flex-col bg-[var(--color-bg-base)]">

@@ -507,14 +507,69 @@ async fn is_maximized(window: tauri::WebviewWindow) -> Result<bool, String> {
 fn show_native_properties(path: String) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        use std::process::Command;
-        Command::new("powershell")
-            .args(["-Command", &format!(
-                "(New-Object -ComObject Shell.Application).NameSpace(0).ParseName('{}').InvokeVerb('properties')",
-                path.replace("'", "''")
-            )])
-            .spawn()
-            .map_err(|e| e.to_string())?;
+        use std::ffi::OsStr;
+        use std::os::windows::ffi::OsStrExt;
+        use std::ptr;
+
+        // Use ShellExecuteExW with "properties" verb
+        #[repr(C)]
+        #[allow(non_snake_case)]
+        struct SHELLEXECUTEINFOW {
+            cbSize: u32,
+            fMask: u32,
+            hwnd: *mut std::ffi::c_void,
+            lpVerb: *const u16,
+            lpFile: *const u16,
+            lpParameters: *const u16,
+            lpDirectory: *const u16,
+            nShow: i32,
+            hInstApp: *mut std::ffi::c_void,
+            lpIDList: *mut std::ffi::c_void,
+            lpClass: *const u16,
+            hkeyClass: *mut std::ffi::c_void,
+            dwHotKey: u32,
+            hIcon: *mut std::ffi::c_void,
+            hProcess: *mut std::ffi::c_void,
+        }
+
+        #[link(name = "shell32")]
+        extern "system" {
+            fn ShellExecuteExW(pExecInfo: *mut SHELLEXECUTEINFOW) -> i32;
+        }
+
+        fn to_wide(s: &str) -> Vec<u16> {
+            OsStr::new(s)
+                .encode_wide()
+                .chain(std::iter::once(0))
+                .collect()
+        }
+
+        let verb = to_wide("properties");
+        let file = to_wide(&path);
+
+        let mut info = SHELLEXECUTEINFOW {
+            cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
+            fMask: 0x0000000C, // SEE_MASK_INVOKEIDLIST
+            hwnd: ptr::null_mut(),
+            lpVerb: verb.as_ptr(),
+            lpFile: file.as_ptr(),
+            lpParameters: ptr::null(),
+            lpDirectory: ptr::null(),
+            nShow: 1, // SW_SHOWNORMAL
+            hInstApp: ptr::null_mut(),
+            lpIDList: ptr::null_mut(),
+            lpClass: ptr::null(),
+            hkeyClass: ptr::null_mut(),
+            dwHotKey: 0,
+            hIcon: ptr::null_mut(),
+            hProcess: ptr::null_mut(),
+        };
+
+        println!("[Properties] Opening for: {}", path);
+
+        unsafe {
+            ShellExecuteExW(&mut info);
+        }
     }
     Ok(())
 }

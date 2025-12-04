@@ -103,7 +103,7 @@ export const ConfirmDialog: FC<ConfirmDialogProps> = ({
         <div className="dialog-overlay" onClick={onCancel}>
             <div className="dialog animate-slideUp" onClick={(e) => e.stopPropagation()}>
                 <h2 className="dialog-title">{title}</h2>
-                <p className="text-[13px] text-[var(--color-text-secondary)] mb-4">{message}</p>
+                <p className="text-[13px] text-[var(--color-text-primary)] mb-4">{message}</p>
                 <div className="dialog-buttons">
                     <button onClick={onCancel} className="dialog-btn dialog-btn-secondary">
                         Cancel
