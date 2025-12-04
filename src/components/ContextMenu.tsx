@@ -1,4 +1,4 @@
-import { FC, useEffect, useRef } from 'react';
+import { FC, useEffect, useRef, useState } from 'react';
 import {
     CutIcon,
     CopyIcon,
@@ -48,6 +48,27 @@ export const ContextMenu: FC<ContextMenuProps> = ({
     onProperties,
 }) => {
     const menuRef = useRef<HTMLDivElement>(null);
+    const [position, setPosition] = useState({ top: y, left: x });
+
+    // Calculate position after render
+    useEffect(() => {
+        if (menuRef.current) {
+            const rect = menuRef.current.getBoundingClientRect();
+            let newTop = y;
+            let newLeft = x;
+
+            // Adjust if overflowing bottom
+            if (y + rect.height > window.innerHeight - 10) {
+                newTop = Math.max(10, y - rect.height);
+            }
+            // Adjust if overflowing right
+            if (x + rect.width > window.innerWidth - 10) {
+                newLeft = Math.max(10, x - rect.width);
+            }
+
+            setPosition({ top: newTop, left: newLeft });
+        }
+    }, [x, y]);
 
     // Close on click outside
     useEffect(() => {
@@ -56,31 +77,22 @@ export const ContextMenu: FC<ContextMenuProps> = ({
                 onClose();
             }
         };
+        const handleEscape = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
         document.addEventListener('mousedown', handleClick);
-        return () => document.removeEventListener('mousedown', handleClick);
+        document.addEventListener('keydown', handleEscape);
+        return () => {
+            document.removeEventListener('mousedown', handleClick);
+            document.removeEventListener('keydown', handleEscape);
+        };
     }, [onClose]);
-
-    // Adjust position to keep in viewport
-    const style = {
-        top: y,
-        left: x,
-    };
-
-    if (menuRef.current) {
-        const rect = menuRef.current.getBoundingClientRect();
-        if (y + rect.height > window.innerHeight) {
-            style.top = y - rect.height;
-        }
-        if (x + rect.width > window.innerWidth) {
-            style.left = x - rect.width;
-        }
-    }
 
     return (
         <div
             ref={menuRef}
-            className="context-menu flex flex-col gap-1 min-w-[240px]"
-            style={style}
+            className="context-menu"
+            style={position}
             onClick={(e) => e.stopPropagation()}
         >
             {/* Primary Actions */}

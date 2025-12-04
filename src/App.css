@@ -68,7 +68,6 @@ body {
   line-height: 1.4;
   color: var(--color-text-primary);
   background-color: transparent;
-  /* Transparent for Mica effect */
   -webkit-font-smoothing: antialiased;
   user-select: none;
 }
@@ -94,13 +93,11 @@ body {
   background: rgba(255, 255, 255, 0.25);
 }
 
-/* Focus */
 :focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: -2px;
 }
 
-/* Button & Input reset */
 button {
   font-family: inherit;
   font-size: inherit;
@@ -281,23 +278,6 @@ input {
   color: var(--color-text-primary);
 }
 
-.search-box {
-  width: 200px;
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  height: 32px;
-  display: flex;
-  align-items: center;
-  padding: 0 10px;
-  gap: 8px;
-  transition: border-color 0.15s;
-}
-
-.search-box:focus-within {
-  border-color: var(--color-accent);
-}
-
 /* ===== SIDEBAR ===== */
 .sidebar {
   background: var(--color-bg-surface);
@@ -305,6 +285,7 @@ input {
 }
 
 .sidebar-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -326,22 +307,13 @@ input {
   color: var(--color-text-primary);
 }
 
-.sidebar-item.active::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  height: 16px;
-  width: 3px;
-  background: var(--color-accent);
-  border-radius: 0 2px 2px 0;
-}
-
 /* ===== FILE AREA ===== */
 .file-area {
   background: var(--color-bg-content);
 }
 
 .file-row {
+  position: relative;
   border-bottom: 1px solid transparent;
 }
 
@@ -353,20 +325,10 @@ input {
   background: var(--color-bg-selected-row);
 }
 
-.file-row.selected::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: var(--color-accent);
-}
-
 /* ===== CONTEXT MENU ===== */
 .context-menu {
   position: fixed;
-  z-index: 1000;
+  z-index: 9999;
   background: #1f1f1f;
   border: 1px solid #383838;
   border-radius: var(--radius-lg);
