@@ -8,14 +8,12 @@ import {
     GridIcon,
     ListIcon,
     RefreshIcon,
-    PlusIcon,
     CutIcon,
     CopyIcon,
     PasteIcon,
     RenameIcon,
     DeleteIcon,
-    NewFolderIcon,
-    MoreIcon
+    NewFolderIcon
 } from '../utils/icons';
 
 interface ToolbarProps {
@@ -41,7 +39,28 @@ interface ToolbarProps {
     onDelete: () => void;
 }
 
-interface ToolbarButtonProps {
+interface NavButtonProps {
+    icon: React.ReactNode;
+    onClick: () => void;
+    disabled?: boolean;
+    title: string;
+}
+
+const NavButton: FC<NavButtonProps> = ({ icon, onClick, disabled, title }) => (
+    <button
+        onClick={onClick}
+        disabled={disabled}
+        title={title}
+        className="w-8 h-8 flex items-center justify-center rounded-[var(--radius-md)] 
+      text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]
+      hover:bg-[var(--color-bg-hover)] disabled:opacity-30 disabled:hover:bg-transparent 
+      disabled:hover:text-[var(--color-text-secondary)] transition-all"
+    >
+        {icon}
+    </button>
+);
+
+interface ActionButtonProps {
     icon: React.ReactNode;
     label: string;
     onClick: () => void;
@@ -49,21 +68,21 @@ interface ToolbarButtonProps {
     danger?: boolean;
 }
 
-const ToolbarButton: FC<ToolbarButtonProps> = ({ icon, label, onClick, disabled, danger }) => (
+const ActionButton: FC<ActionButtonProps> = ({ icon, label, onClick, disabled, danger }) => (
     <button
         onClick={onClick}
         disabled={disabled}
-        className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-[var(--radius-md)] transition-all duration-100
-      ${disabled
-                ? 'opacity-40 cursor-not-allowed'
-                : danger
-                    ? 'hover:bg-red-500/10 text-[var(--color-danger)]'
-                    : 'hover:bg-[var(--color-bg-card-hover)] text-[var(--color-text-primary)]'
-            }`}
         title={label}
+        className={`px-2.5 py-1.5 flex items-center gap-2 rounded-[var(--radius-md)] text-[12px] transition-all
+      ${disabled
+                ? 'opacity-30 cursor-not-allowed'
+                : danger
+                    ? 'text-[var(--color-text-secondary)] hover:text-[var(--color-danger)] hover:bg-[rgba(248,81,73,0.1)]'
+                    : 'text-[var(--color-text-secondary)] hover:text-[var(--color-accent)] hover:bg-[var(--color-bg-hover)]'
+            }`}
     >
         {icon}
-        <span className="text-[11px]">{label}</span>
+        <span className="hidden sm:inline">{label}</span>
     </button>
 );
 
@@ -115,49 +134,26 @@ export const Toolbar: FC<ToolbarProps> = ({
         }
     };
 
-    // Parse breadcrumbs from path
+    // Parse breadcrumbs
     const breadcrumbs = currentPath.split('\\').filter(Boolean);
 
     return (
-        <header className="bg-[var(--color-bg-card)] border-b border-[var(--color-border)]">
-            {/* Navigation row */}
-            <div className="h-11 flex items-center gap-1 px-2">
-                {/* Navigation buttons */}
-                <div className="flex items-center">
-                    <button
-                        onClick={onBack}
-                        disabled={!canGoBack}
-                        className="p-2 rounded-[var(--radius-md)] hover:bg-[var(--color-bg-card-hover)] disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-                        title="Back (Alt+Left)"
-                    >
-                        <ChevronLeftIcon size={16} />
-                    </button>
-                    <button
-                        onClick={onForward}
-                        disabled={!canGoForward}
-                        className="p-2 rounded-[var(--radius-md)] hover:bg-[var(--color-bg-card-hover)] disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-                        title="Forward (Alt+Right)"
-                    >
-                        <ChevronRightIcon size={16} />
-                    </button>
-                    <button
-                        onClick={onUp}
-                        className="p-2 rounded-[var(--radius-md)] hover:bg-[var(--color-bg-card-hover)] transition-colors"
-                        title="Up (Alt+Up)"
-                    >
-                        <ChevronUpIcon size={16} />
-                    </button>
-                    <button
-                        onClick={onRefresh}
-                        className="p-2 rounded-[var(--radius-md)] hover:bg-[var(--color-bg-card-hover)] transition-colors"
-                        title="Refresh (F5)"
-                    >
-                        <RefreshIcon size={16} />
-                    </button>
+        <header className="bg-[var(--color-bg-surface)] border-b border-[var(--color-border)]">
+            {/* Main toolbar row */}
+            <div className="h-11 flex items-center gap-2 px-3">
+                {/* Navigation */}
+                <div className="flex items-center gap-0.5">
+                    <NavButton icon={<ChevronLeftIcon size={16} />} onClick={onBack} disabled={!canGoBack} title="Back" />
+                    <NavButton icon={<ChevronRightIcon size={16} />} onClick={onForward} disabled={!canGoForward} title="Forward" />
+                    <NavButton icon={<ChevronUpIcon size={16} />} onClick={onUp} title="Up" />
+                    <NavButton icon={<RefreshIcon size={16} />} onClick={onRefresh} title="Refresh" />
                 </div>
 
-                {/* Breadcrumb / Path bar */}
-                <div className="flex-1 min-w-0 mx-2">
+                {/* Separator */}
+                <div className="w-px h-5 bg-[var(--color-divider)]" />
+
+                {/* Breadcrumb / Path */}
+                <div className="flex-1 min-w-0">
                     {isEditing ? (
                         <form onSubmit={handlePathSubmit} className="w-full">
                             <input
@@ -172,8 +168,8 @@ export const Toolbar: FC<ToolbarProps> = ({
                                     }, 150);
                                 }}
                                 onKeyDown={handlePathKeyDown}
-                                className="w-full h-8 px-3 text-[13px] bg-[var(--color-bg-mica)] border border-[var(--color-accent)] 
-                  rounded-[var(--radius-md)] outline-none text-[var(--color-text-primary)]"
+                                className="w-full h-7 px-3 text-[13px] bg-[var(--color-bg-base)] border border-[var(--color-accent)] 
+                  rounded-[var(--radius-md)] text-[var(--color-text-primary)]"
                                 autoFocus
                                 spellCheck={false}
                             />
@@ -181,19 +177,23 @@ export const Toolbar: FC<ToolbarProps> = ({
                     ) : (
                         <div
                             onClick={() => setIsEditing(true)}
-                            className="h-8 flex items-center gap-1 px-2 bg-[var(--color-bg-mica)] rounded-[var(--radius-md)] 
-                border border-[var(--color-border)] hover:border-[var(--color-border-hover)] cursor-text transition-colors"
+                            className="h-7 flex items-center gap-0.5 px-2 bg-[var(--color-bg-base)] rounded-[var(--radius-md)] 
+                border border-[var(--color-border)] hover:border-[var(--color-border-hover)] 
+                cursor-text transition-colors overflow-hidden"
                         >
                             {breadcrumbs.map((segment, index) => (
-                                <div key={index} className="flex items-center">
-                                    {index > 0 && <ChevronRightIcon size={14} className="mx-0.5 text-[var(--color-text-tertiary)]" />}
+                                <div key={index} className="flex items-center flex-shrink-0">
+                                    {index > 0 && (
+                                        <ChevronRightIcon size={12} className="mx-0.5 text-[var(--color-text-muted)] flex-shrink-0" />
+                                    )}
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             const path = breadcrumbs.slice(0, index + 1).join('\\') + '\\';
                                             onNavigate(path);
                                         }}
-                                        className="px-1.5 py-0.5 text-[13px] rounded hover:bg-[var(--color-bg-card-hover)] transition-colors"
+                                        className="px-1.5 py-0.5 text-[12px] text-[var(--color-text-secondary)] rounded 
+                      hover:text-[var(--color-accent)] hover:bg-[var(--color-bg-hover)] transition-colors"
                                     >
                                         {segment}
                                     </button>
@@ -204,67 +204,67 @@ export const Toolbar: FC<ToolbarProps> = ({
                 </div>
 
                 {/* Search */}
-                <div className="relative w-56">
-                    <SearchIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)]" />
+                <div className="relative w-48">
+                    <SearchIcon size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
                     <input
                         type="text"
                         value={searchQuery}
                         onChange={(e) => onSearchChange(e.target.value)}
-                        placeholder="Search"
-                        className="w-full h-8 pl-9 pr-3 text-[13px] bg-[var(--color-bg-mica)] border border-[var(--color-border)] 
-              rounded-[var(--radius-md)] outline-none transition-colors
-              focus:border-[var(--color-accent)]
-              text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)]"
+                        placeholder="Search..."
+                        className="w-full h-7 pl-8 pr-3 text-[12px] bg-[var(--color-bg-base)] border border-[var(--color-border)] 
+              rounded-[var(--radius-md)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]
+              focus:border-[var(--color-accent)] transition-colors"
                     />
                 </div>
             </div>
 
-            {/* Command bar */}
-            <div className="h-14 flex items-center gap-1 px-2 border-t border-[var(--color-divider)]">
-                {/* New button with dropdown style */}
-                <button
+            {/* Actions row */}
+            <div className="h-9 flex items-center gap-1 px-3 border-t border-[var(--color-divider)]">
+                {/* Create */}
+                <ActionButton
+                    icon={<NewFolderIcon size={15} />}
+                    label="New Folder"
                     onClick={onNewFolder}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-[var(--radius-md)] hover:bg-[var(--color-bg-card-hover)] transition-colors"
-                >
-                    <PlusIcon size={16} />
-                    <span className="text-[13px]">New</span>
-                    <ChevronRightIcon size={12} className="rotate-90 ml-1 text-[var(--color-text-tertiary)]" />
-                </button>
+                />
 
-                {/* Divider */}
-                <div className="w-px h-8 bg-[var(--color-divider)] mx-1" />
+                {/* Separator */}
+                <div className="w-px h-4 bg-[var(--color-divider)] mx-1" />
 
-                {/* File operations */}
-                <ToolbarButton icon={<CutIcon size={18} />} label="Cut" onClick={onCut} disabled={!hasSelection} />
-                <ToolbarButton icon={<CopyIcon size={18} />} label="Copy" onClick={onCopy} disabled={!hasSelection} />
-                <ToolbarButton icon={<PasteIcon size={18} />} label="Paste" onClick={onPaste} disabled={!hasClipboard} />
-                <ToolbarButton icon={<RenameIcon size={18} />} label="Rename" onClick={onRename} disabled={!hasSelection} />
-                <ToolbarButton icon={<DeleteIcon size={18} />} label="Delete" onClick={onDelete} disabled={!hasSelection} danger />
+                {/* Edit actions */}
+                <ActionButton icon={<CutIcon size={15} />} label="Cut" onClick={onCut} disabled={!hasSelection} />
+                <ActionButton icon={<CopyIcon size={15} />} label="Copy" onClick={onCopy} disabled={!hasSelection} />
+                <ActionButton icon={<PasteIcon size={15} />} label="Paste" onClick={onPaste} disabled={!hasClipboard} />
+
+                {/* Separator */}
+                <div className="w-px h-4 bg-[var(--color-divider)] mx-1" />
+
+                <ActionButton icon={<RenameIcon size={15} />} label="Rename" onClick={onRename} disabled={!hasSelection} />
+                <ActionButton icon={<DeleteIcon size={15} />} label="Delete" onClick={onDelete} disabled={!hasSelection} danger />
 
                 {/* Spacer */}
                 <div className="flex-1" />
 
-                {/* View options */}
-                <div className="flex items-center gap-1 px-2">
+                {/* View toggle */}
+                <div className="flex items-center gap-0.5 p-0.5 bg-[var(--color-bg-base)] rounded-[var(--radius-md)]">
                     <button
                         onClick={() => onViewModeChange('list')}
-                        className={`p-2 rounded-[var(--radius-md)] transition-colors ${viewMode === 'list'
-                                ? 'bg-[var(--color-bg-selected)] text-[var(--color-accent)]'
-                                : 'hover:bg-[var(--color-bg-card-hover)]'
+                        className={`w-7 h-6 flex items-center justify-center rounded transition-colors ${viewMode === 'list'
+                                ? 'bg-[var(--color-bg-hover)] text-[var(--color-accent)]'
+                                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
                             }`}
-                        title="Details view"
+                        title="List view"
                     >
-                        <ListIcon size={18} />
+                        <ListIcon size={14} />
                     </button>
                     <button
                         onClick={() => onViewModeChange('grid')}
-                        className={`p-2 rounded-[var(--radius-md)] transition-colors ${viewMode === 'grid'
-                                ? 'bg-[var(--color-bg-selected)] text-[var(--color-accent)]'
-                                : 'hover:bg-[var(--color-bg-card-hover)]'
+                        className={`w-7 h-6 flex items-center justify-center rounded transition-colors ${viewMode === 'grid'
+                                ? 'bg-[var(--color-bg-hover)] text-[var(--color-accent)]'
+                                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
                             }`}
                         title="Grid view"
                     >
-                        <GridIcon size={18} />
+                        <GridIcon size={14} />
                     </button>
                 </div>
             </div>

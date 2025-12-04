@@ -1,6 +1,6 @@
 import { FC } from 'react';
 import { FileEntry, DriveInfo } from '../types';
-import { DriveIcon, getQuickAccessIcon } from '../utils/icons';
+import { DriveIcon, getQuickAccessIcon, FolderIcon } from '../utils/icons';
 
 interface SidebarProps {
     drives: DriveInfo[];
@@ -11,27 +11,30 @@ interface SidebarProps {
 
 export const Sidebar: FC<SidebarProps> = ({ drives, quickAccess, currentPath, onNavigate }) => {
     return (
-        <aside className="w-52 flex-shrink-0 bg-[var(--color-bg-card)] flex flex-col overflow-hidden border-r border-[var(--color-border)]">
+        <aside className="w-48 flex-shrink-0 bg-[var(--color-bg-surface)] flex flex-col overflow-hidden border-r border-[var(--color-border)]">
             {/* Quick Access */}
-            <div className="py-2 px-2">
-                <h2 className="text-[11px] font-semibold text-[var(--color-text-tertiary)] uppercase tracking-wider px-3 py-2">
-                    Quick Access
-                </h2>
-                <nav className="space-y-0.5">
+            <div className="py-3 px-2">
+                <div className="flex items-center gap-2 px-3 py-1 text-[11px] font-medium text-[var(--color-text-muted)] uppercase tracking-wider">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                        <path d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" stroke="currentColor" strokeWidth="1.5" />
+                    </svg>
+                    Favorites
+                </div>
+                <nav className="mt-1 space-y-0.5">
                     {quickAccess.map((folder) => {
                         const isActive = currentPath === folder.path;
                         return (
                             <button
                                 key={folder.path}
                                 onClick={() => onNavigate(folder.path)}
-                                className={`w-full flex items-center gap-3 px-3 py-[6px] rounded-[var(--radius-md)] text-[13px] transition-all duration-100
+                                className={`w-full flex items-center gap-3 px-3 py-1.5 rounded-[var(--radius-md)] text-[13px] transition-all duration-100
                   ${isActive
                                         ? 'bg-[var(--color-bg-selected)] text-[var(--color-accent)]'
-                                        : 'text-[var(--color-text-primary)] hover:bg-[var(--color-bg-card-hover)]'
+                                        : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-hover)]'
                                     }`}
                             >
-                                <span className={isActive ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-secondary)]'}>
-                                    {getQuickAccessIcon(folder.name, 18)}
+                                <span className={`flex-shrink-0 ${isActive ? 'text-[var(--color-accent)]' : ''}`}>
+                                    {getQuickAccessIcon(folder.name, 16)}
                                 </span>
                                 <span className="truncate">{folder.name}</span>
                             </button>
@@ -41,28 +44,36 @@ export const Sidebar: FC<SidebarProps> = ({ drives, quickAccess, currentPath, on
             </div>
 
             {/* Divider */}
-            <div className="h-px bg-[var(--color-divider)] mx-4 my-1" />
+            <div className="h-px bg-[var(--color-divider)] mx-3" />
 
-            {/* This PC section */}
-            <div className="py-2 px-2 flex-1 overflow-y-auto">
-                <h2 className="text-[11px] font-semibold text-[var(--color-text-tertiary)] uppercase tracking-wider px-3 py-2">
+            {/* This PC */}
+            <div className="py-3 px-2 flex-1 overflow-y-auto">
+                <div className="flex items-center gap-2 px-3 py-1 text-[11px] font-medium text-[var(--color-text-muted)] uppercase tracking-wider">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                        <rect x="2" y="3" width="20" height="14" rx="2" stroke="currentColor" strokeWidth="1.5" />
+                        <path d="M8 21H16M12 17V21" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                    </svg>
                     This PC
-                </h2>
-                <nav className="space-y-0.5">
+                </div>
+                <nav className="mt-1 space-y-0.5">
                     {drives.map((drive) => {
                         const isActive = currentPath.toLowerCase().startsWith(drive.path.toLowerCase());
+                        // Extract drive letter
+                        const driveLetter = drive.path.charAt(0);
                         return (
                             <button
                                 key={drive.path}
                                 onClick={() => onNavigate(drive.path)}
-                                className={`w-full flex items-center gap-3 px-3 py-[6px] rounded-[var(--radius-md)] text-[13px] transition-all duration-100
+                                className={`w-full flex items-center gap-3 px-3 py-1.5 rounded-[var(--radius-md)] text-[13px] transition-all duration-100
                   ${isActive
                                         ? 'bg-[var(--color-bg-selected)] text-[var(--color-accent)]'
-                                        : 'text-[var(--color-text-primary)] hover:bg-[var(--color-bg-card-hover)]'
+                                        : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-hover)]'
                                     }`}
                             >
-                                <DriveIcon size={18} />
-                                <span className="truncate">{drive.name}</span>
+                                <DriveIcon size={16} />
+                                <span className="truncate">
+                                    {drive.name.includes('(') ? drive.name : `${driveLetter}: Drive`}
+                                </span>
                             </button>
                         );
                     })}

@@ -268,23 +268,19 @@ fn delete_item(path: String) -> Result<(), String> {
     Ok(())
 }
 
-/// Copy a file or folder to destination
+/// Copy a file or folder to destination with smart naming
 #[tauri::command]
 fn copy_item(source: String, destination: String) -> Result<String, String> {
     let src = Path::new(&source);
     let src_name = src.file_name().ok_or("Cannot get file name")?;
-    let dest_path = Path::new(&destination).join(src_name);
+    let dest_dir = Path::new(&destination);
 
     if !src.exists() {
         return Err(format!("Source does not exist: {}", source));
     }
 
-    if dest_path.exists() {
-        return Err(format!(
-            "Destination already exists: {}",
-            dest_path.display()
-        ));
-    }
+    // Generate unique name if destination exists
+    let dest_path = get_unique_path(dest_dir, src_name.to_str().unwrap_or(""), src.is_dir());
 
     if src.is_dir() {
         copy_dir_recursive(src, &dest_path)?;
@@ -293,6 +289,48 @@ fn copy_item(source: String, destination: String) -> Result<String, String> {
     }
 
     Ok(dest_path.to_string_lossy().to_string())
+}
+
+/// Generate a unique path by adding (1), (2), etc. if file exists
+fn get_unique_path(dest_dir: &Path, name: &str, is_dir: bool) -> std::path::PathBuf {
+    let mut dest_path = dest_dir.join(name);
+
+    if !dest_path.exists() {
+        return dest_path;
+    }
+
+    // Separate name and extension
+    let (base_name, extension) = if is_dir {
+        (name.to_string(), String::new())
+    } else {
+        let path = Path::new(name);
+        let ext = path
+            .extension()
+            .map(|e| format!(".{}", e.to_string_lossy()))
+            .unwrap_or_default();
+        let stem = path
+            .file_stem()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| name.to_string());
+        (stem, ext)
+    };
+
+    // Try adding (1), (2), etc.
+    let mut counter = 1;
+    loop {
+        let new_name = format!("{} ({}){}", base_name, counter, extension);
+        dest_path = dest_dir.join(&new_name);
+        if !dest_path.exists() {
+            return dest_path;
+        }
+        counter += 1;
+        if counter > 1000 {
+            // Safety limit
+            break;
+        }
+    }
+
+    dest_path
 }
 
 /// Helper function to copy directories recursively

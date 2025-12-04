@@ -4,6 +4,7 @@ import { open } from '@tauri-apps/plugin-shell';
 import './App.css';
 
 import { FileEntry, DriveInfo, ViewMode } from './types';
+import { TabBar, Tab } from './components/TabBar';
 import { Sidebar } from './components/Sidebar';
 import { Toolbar } from './components/Toolbar';
 import { FileGrid } from './components/FileGrid';
@@ -11,40 +12,69 @@ import { FileList } from './components/FileList';
 import { ContextMenu } from './components/ContextMenu';
 import { InputDialog, ConfirmDialog } from './components/Dialog';
 
-// Clipboard state for copy/cut operations
+// Generate unique ID
+const generateId = () => Math.random().toString(36).substring(2, 9);
+
+// Tab state
+interface TabState {
+  path: string;
+  title: string;
+  history: string[];
+  historyIndex: number;
+  files: FileEntry[];
+  selectedFile: FileEntry | null;
+  isLoading: boolean;
+  error: string | null;
+  searchQuery: string;
+  isSearching: boolean;
+}
+
+// Clipboard
 interface ClipboardState {
   items: FileEntry[];
   operation: 'copy' | 'cut';
 }
 
-// Dialog state
 type DialogType = 'newFolder' | 'rename' | 'delete' | null;
 
 function App() {
-  // Core state
-  const [currentPath, setCurrentPath] = useState<string>('C:\\');
-  const [files, setFiles] = useState<FileEntry[]>([]);
+  // Global state
   const [drives, setDrives] = useState<DriveInfo[]>([]);
   const [quickAccess, setQuickAccess] = useState<FileEntry[]>([]);
-  const [selectedFile, setSelectedFile] = useState<FileEntry | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-
-  // Navigation history
-  const [history, setHistory] = useState<string[]>(['C:\\']);
-  const [historyIndex, setHistoryIndex] = useState(0);
-
-  // Clipboard
   const [clipboard, setClipboard] = useState<ClipboardState | null>(null);
 
-  // Context menu
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; file: FileEntry | null } | null>(null);
+  // Tabs
+  const [tabs, setTabs] = useState<Tab[]>([{ id: generateId(), path: 'C:\\', title: 'C:' }]);
+  const [activeTabId, setActiveTabId] = useState<string>(tabs[0].id);
+  const [tabStates, setTabStates] = useState<Record<string, TabState>>({});
 
-  // Dialogs
+  // UI
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; file: FileEntry | null } | null>(null);
   const [dialog, setDialog] = useState<DialogType>(null);
+
+  // Get current tab state
+  const currentTab = tabs.find(t => t.id === activeTabId)!;
+  const currentState = tabStates[activeTabId] || {
+    path: 'C:\\',
+    title: 'C:',
+    history: ['C:\\'],
+    historyIndex: 0,
+    files: [],
+    selectedFile: null,
+    isLoading: false,
+    error: null,
+    searchQuery: '',
+    isSearching: false,
+  };
+
+  // Update tab state helper
+  const updateTabState = useCallback((tabId: string, updates: Partial<TabState>) => {
+    setTabStates(prev => ({
+      ...prev,
+      [tabId]: { ...prev[tabId], ...updates }
+    }));
+  }, []);
 
   // Initialize
   useEffect(() => {
@@ -57,18 +87,28 @@ function App() {
         setDrives(drivesData);
         setQuickAccess(quickAccessData);
 
-        // Start in user profile
+        // Initialize first tab with user folder
         if (quickAccessData.length > 0) {
-          const firstFolder = quickAccessData[0];
-          if (firstFolder) {
-            // Go to parent of Desktop (user folder)
-            const userPath = firstFolder.path.replace('\\Desktop', '');
-            navigateTo(userPath, true);
-          }
+          const userPath = quickAccessData[0].path.replace('\\Desktop', '').replace('\\Downloads', '').replace('\\Documents', '');
+          const initialState: TabState = {
+            path: userPath,
+            title: userPath.split('\\').filter(Boolean).pop() || 'Home',
+            history: [userPath],
+            historyIndex: 0,
+            files: [],
+            selectedFile: null,
+            isLoading: false,
+            error: null,
+            searchQuery: '',
+            isSearching: false,
+          };
+
+          setTabStates({ [tabs[0].id]: initialState });
+          setTabs([{ id: tabs[0].id, path: userPath, title: initialState.title }]);
+          loadDirectoryForTab(tabs[0].id, userPath);
         }
       } catch (err) {
         console.error('Failed to initialize:', err);
-        loadDirectory('C:\\');
       }
     };
     init();
@@ -77,16 +117,15 @@ function App() {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't handle if dialog is open
       if (dialog) return;
 
       if (e.ctrlKey) {
         switch (e.key.toLowerCase()) {
           case 'c':
-            if (selectedFile) handleCopy();
+            if (currentState.selectedFile) handleCopy();
             break;
           case 'x':
-            if (selectedFile) handleCut();
+            if (currentState.selectedFile) handleCut();
             break;
           case 'v':
             if (clipboard) handlePaste();
@@ -97,14 +136,22 @@ function App() {
               setDialog('newFolder');
             }
             break;
+          case 't':
+            e.preventDefault();
+            handleNewTab();
+            break;
+          case 'w':
+            e.preventDefault();
+            if (tabs.length > 1) handleCloseTab(activeTabId);
+            break;
         }
       } else {
         switch (e.key) {
           case 'Delete':
-            if (selectedFile) setDialog('delete');
+            if (currentState.selectedFile) setDialog('delete');
             break;
           case 'F2':
-            if (selectedFile) setDialog('rename');
+            if (currentState.selectedFile) setDialog('rename');
             break;
           case 'F5':
             refresh();
@@ -118,122 +165,183 @@ function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedFile, clipboard, dialog]);
+  }, [currentState.selectedFile, clipboard, dialog, tabs, activeTabId]);
 
-  // Load directory
-  const loadDirectory = useCallback(async (path: string) => {
-    setIsLoading(true);
-    setError(null);
+  // Load directory for a specific tab
+  const loadDirectoryForTab = useCallback(async (tabId: string, path: string) => {
+    updateTabState(tabId, { isLoading: true, error: null });
     try {
       const entries = await invoke<FileEntry[]>('read_directory', { path });
-      setFiles(entries);
-      setSelectedFile(null);
+      updateTabState(tabId, { files: entries, selectedFile: null, isLoading: false });
     } catch (err) {
-      setError(String(err));
-      setFiles([]);
-    } finally {
-      setIsLoading(false);
+      updateTabState(tabId, { error: String(err), files: [], isLoading: false });
     }
-  }, []);
+  }, [updateTabState]);
 
-  // Navigate to path
+  // Navigate for current tab
   const navigateTo = useCallback((path: string, replaceHistory = false) => {
-    setCurrentPath(path);
-    setSearchQuery('');
-    setIsSearching(false);
-    setContextMenu(null);
+    const title = path.split('\\').filter(Boolean).pop() || path;
 
-    if (replaceHistory) {
-      setHistory([path]);
-      setHistoryIndex(0);
-    } else {
-      setHistory(prev => {
-        const newHistory = prev.slice(0, historyIndex + 1);
+    // Update tab
+    setTabs(prev => prev.map(t =>
+      t.id === activeTabId ? { ...t, path, title } : t
+    ));
+
+    // Update tab state
+    setTabStates(prev => {
+      const current = prev[activeTabId] || { history: [], historyIndex: 0 };
+      let newHistory: string[];
+      let newHistoryIndex: number;
+
+      if (replaceHistory) {
+        newHistory = [path];
+        newHistoryIndex = 0;
+      } else {
+        newHistory = current.history.slice(0, current.historyIndex + 1);
         newHistory.push(path);
-        return newHistory;
-      });
-      setHistoryIndex(prev => prev + 1);
-    }
+        newHistoryIndex = newHistory.length - 1;
+      }
 
-    loadDirectory(path);
-  }, [historyIndex, loadDirectory]);
+      return {
+        ...prev,
+        [activeTabId]: {
+          ...prev[activeTabId],
+          path,
+          title,
+          history: newHistory,
+          historyIndex: newHistoryIndex,
+          searchQuery: '',
+          isSearching: false,
+        }
+      };
+    });
+
+    setContextMenu(null);
+    loadDirectoryForTab(activeTabId, path);
+  }, [activeTabId, loadDirectoryForTab]);
 
   // Navigation
-  const canGoBack = historyIndex > 0;
-  const canGoForward = historyIndex < history.length - 1;
+  const canGoBack = currentState.historyIndex > 0;
+  const canGoForward = currentState.historyIndex < (currentState.history?.length || 1) - 1;
 
   const goBack = useCallback(() => {
     if (canGoBack) {
-      const newIndex = historyIndex - 1;
-      setHistoryIndex(newIndex);
-      const path = history[newIndex];
-      setCurrentPath(path);
-      loadDirectory(path);
+      const newIndex = currentState.historyIndex - 1;
+      const path = currentState.history[newIndex];
+      updateTabState(activeTabId, { historyIndex: newIndex, path });
+      setTabs(prev => prev.map(t =>
+        t.id === activeTabId ? { ...t, path, title: path.split('\\').filter(Boolean).pop() || path } : t
+      ));
+      loadDirectoryForTab(activeTabId, path);
     }
-  }, [canGoBack, historyIndex, history, loadDirectory]);
+  }, [canGoBack, currentState, activeTabId, loadDirectoryForTab, updateTabState]);
 
   const goForward = useCallback(() => {
     if (canGoForward) {
-      const newIndex = historyIndex + 1;
-      setHistoryIndex(newIndex);
-      const path = history[newIndex];
-      setCurrentPath(path);
-      loadDirectory(path);
+      const newIndex = currentState.historyIndex + 1;
+      const path = currentState.history[newIndex];
+      updateTabState(activeTabId, { historyIndex: newIndex, path });
+      setTabs(prev => prev.map(t =>
+        t.id === activeTabId ? { ...t, path, title: path.split('\\').filter(Boolean).pop() || path } : t
+      ));
+      loadDirectoryForTab(activeTabId, path);
     }
-  }, [canGoForward, historyIndex, history, loadDirectory]);
+  }, [canGoForward, currentState, activeTabId, loadDirectoryForTab, updateTabState]);
 
   const goUp = useCallback(async () => {
     try {
-      const parent = await invoke<string | null>('get_parent_directory', { path: currentPath });
-      if (parent && parent !== currentPath) {
+      const parent = await invoke<string | null>('get_parent_directory', { path: currentState.path });
+      if (parent && parent !== currentState.path) {
         navigateTo(parent);
       }
     } catch (err) {
       console.error('Failed to get parent:', err);
     }
-  }, [currentPath, navigateTo]);
+  }, [currentState.path, navigateTo]);
 
   const refresh = useCallback(() => {
-    if (isSearching && searchQuery) {
-      handleSearch(searchQuery);
+    if (currentState.isSearching && currentState.searchQuery) {
+      handleSearch(currentState.searchQuery);
     } else {
-      loadDirectory(currentPath);
+      loadDirectoryForTab(activeTabId, currentState.path);
     }
-  }, [currentPath, isSearching, searchQuery, loadDirectory]);
+  }, [activeTabId, currentState, loadDirectoryForTab]);
 
   // Search
   const handleSearch = useCallback(async (query: string) => {
-    setSearchQuery(query);
+    updateTabState(activeTabId, { searchQuery: query });
 
     if (!query.trim()) {
-      setIsSearching(false);
-      loadDirectory(currentPath);
+      updateTabState(activeTabId, { isSearching: false });
+      loadDirectoryForTab(activeTabId, currentState.path);
       return;
     }
 
-    setIsSearching(true);
-    setIsLoading(true);
-    setError(null);
+    updateTabState(activeTabId, { isSearching: true, isLoading: true, error: null });
 
     try {
       const results = await invoke<FileEntry[]>('search_files', {
-        path: currentPath,
+        path: currentState.path,
         query: query.trim(),
         maxResults: 100,
       });
-      setFiles(results);
+      updateTabState(activeTabId, { files: results, isLoading: false });
     } catch (err) {
-      setError(String(err));
-      setFiles([]);
-    } finally {
-      setIsLoading(false);
+      updateTabState(activeTabId, { error: String(err), files: [], isLoading: false });
     }
-  }, [currentPath, loadDirectory]);
+  }, [activeTabId, currentState.path, loadDirectoryForTab, updateTabState]);
 
-  // File selection
-  const handleSelect = useCallback((file: FileEntry) => {
-    setSelectedFile(file);
+  // Tab management
+  const handleNewTab = useCallback(() => {
+    const id = generateId();
+    const path = currentState.path;
+    const title = path.split('\\').filter(Boolean).pop() || path;
+
+    setTabs(prev => [...prev, { id, path, title }]);
+    setTabStates(prev => ({
+      ...prev,
+      [id]: {
+        path,
+        title,
+        history: [path],
+        historyIndex: 0,
+        files: currentState.files,
+        selectedFile: null,
+        isLoading: false,
+        error: null,
+        searchQuery: '',
+        isSearching: false,
+      }
+    }));
+    setActiveTabId(id);
+  }, [currentState]);
+
+  const handleCloseTab = useCallback((tabId: string) => {
+    if (tabs.length <= 1) return;
+
+    const index = tabs.findIndex(t => t.id === tabId);
+    const newTabs = tabs.filter(t => t.id !== tabId);
+
+    if (tabId === activeTabId) {
+      const newActiveIndex = Math.min(index, newTabs.length - 1);
+      setActiveTabId(newTabs[newActiveIndex].id);
+    }
+
+    setTabs(newTabs);
+    setTabStates(prev => {
+      const { [tabId]: _, ...rest } = prev;
+      return rest;
+    });
+  }, [tabs, activeTabId]);
+
+  const handleTabClick = useCallback((tabId: string) => {
+    setActiveTabId(tabId);
   }, []);
+
+  // File actions
+  const handleSelect = useCallback((file: FileEntry) => {
+    updateTabState(activeTabId, { selectedFile: file });
+  }, [activeTabId, updateTabState]);
 
   const handleOpen = useCallback(async (file: FileEntry) => {
     if (file.is_dir) {
@@ -243,17 +351,17 @@ function App() {
         await open(file.path);
       } catch (err) {
         console.error('Failed to open file:', err);
-        setError(`Failed to open: ${err}`);
+        updateTabState(activeTabId, { error: `Failed to open: ${err}` });
       }
     }
-  }, [navigateTo]);
+  }, [navigateTo, activeTabId, updateTabState]);
 
   // Context menu
   const handleContextMenu = useCallback((e: React.MouseEvent, file: FileEntry) => {
     e.preventDefault();
-    setSelectedFile(file);
+    updateTabState(activeTabId, { selectedFile: file });
     setContextMenu({ x: e.clientX, y: e.clientY, file });
-  }, []);
+  }, [activeTabId, updateTabState]);
 
   const handleBackgroundContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -262,16 +370,16 @@ function App() {
 
   // File operations
   const handleCopy = useCallback(() => {
-    if (selectedFile) {
-      setClipboard({ items: [selectedFile], operation: 'copy' });
+    if (currentState.selectedFile) {
+      setClipboard({ items: [currentState.selectedFile], operation: 'copy' });
     }
-  }, [selectedFile]);
+  }, [currentState.selectedFile]);
 
   const handleCut = useCallback(() => {
-    if (selectedFile) {
-      setClipboard({ items: [selectedFile], operation: 'cut' });
+    if (currentState.selectedFile) {
+      setClipboard({ items: [currentState.selectedFile], operation: 'cut' });
     }
-  }, [selectedFile]);
+  }, [currentState.selectedFile]);
 
   const handlePaste = useCallback(async () => {
     if (!clipboard) return;
@@ -279,9 +387,9 @@ function App() {
     try {
       for (const item of clipboard.items) {
         if (clipboard.operation === 'copy') {
-          await invoke('copy_item', { source: item.path, destination: currentPath });
+          await invoke('copy_item', { source: item.path, destination: currentState.path });
         } else {
-          await invoke('move_item', { source: item.path, destination: currentPath });
+          await invoke('move_item', { source: item.path, destination: currentState.path });
         }
       }
 
@@ -291,56 +399,65 @@ function App() {
 
       refresh();
     } catch (err) {
-      setError(String(err));
+      updateTabState(activeTabId, { error: String(err) });
     }
-  }, [clipboard, currentPath, refresh]);
+  }, [clipboard, currentState.path, refresh, activeTabId, updateTabState]);
 
   const handleNewFolder = useCallback(async (name: string) => {
     try {
-      await invoke('create_folder', { path: currentPath, name });
+      await invoke('create_folder', { path: currentState.path, name });
       refresh();
       setDialog(null);
     } catch (err) {
-      setError(String(err));
+      updateTabState(activeTabId, { error: String(err) });
     }
-  }, [currentPath, refresh]);
+  }, [currentState.path, refresh, activeTabId, updateTabState]);
 
   const handleRename = useCallback(async (newName: string) => {
-    if (!selectedFile) return;
+    if (!currentState.selectedFile) return;
 
     try {
-      await invoke('rename_item', { oldPath: selectedFile.path, newName });
+      await invoke('rename_item', { oldPath: currentState.selectedFile.path, newName });
       refresh();
       setDialog(null);
-      setSelectedFile(null);
+      updateTabState(activeTabId, { selectedFile: null });
     } catch (err) {
-      setError(String(err));
+      updateTabState(activeTabId, { error: String(err) });
     }
-  }, [selectedFile, refresh]);
+  }, [currentState.selectedFile, refresh, activeTabId, updateTabState]);
 
   const handleDelete = useCallback(async () => {
-    if (!selectedFile) return;
+    if (!currentState.selectedFile) return;
 
     try {
-      await invoke('delete_item', { path: selectedFile.path });
+      await invoke('delete_item', { path: currentState.selectedFile.path });
       refresh();
       setDialog(null);
-      setSelectedFile(null);
+      updateTabState(activeTabId, { selectedFile: null });
     } catch (err) {
-      setError(String(err));
+      updateTabState(activeTabId, { error: String(err) });
     }
-  }, [selectedFile, refresh]);
+  }, [currentState.selectedFile, refresh, activeTabId, updateTabState]);
 
   return (
-    <div className="h-screen flex flex-col bg-[var(--color-bg-mica)]">
+    <div className="h-screen flex flex-col bg-[var(--color-bg-base)]">
+      {/* Tab Bar */}
+      <TabBar
+        tabs={tabs}
+        activeTabId={activeTabId}
+        onTabClick={handleTabClick}
+        onTabClose={handleCloseTab}
+        onNewTab={handleNewTab}
+      />
+
       {/* Toolbar */}
       <Toolbar
-        currentPath={currentPath}
+        currentPath={currentState.path}
         canGoBack={canGoBack}
         canGoForward={canGoForward}
         viewMode={viewMode}
-        searchQuery={searchQuery}
-        hasSelection={!!selectedFile}
+        searchQuery={currentState.searchQuery}
+        hasSelection={!!currentState.selectedFile}
         hasClipboard={!!clipboard}
         onBack={goBack}
         onForward={goForward}
@@ -362,50 +479,58 @@ function App() {
         <Sidebar
           drives={drives}
           quickAccess={quickAccess}
-          currentPath={currentPath}
+          currentPath={currentState.path}
           onNavigate={navigateTo}
         />
 
         {/* Main content */}
         <main
-          className="flex-1 flex flex-col overflow-hidden"
+          className="flex-1 flex flex-col overflow-hidden bg-[var(--color-bg-surface)]"
           onContextMenu={handleBackgroundContextMenu}
         >
           {/* Search indicator */}
-          {isSearching && (
-            <div className="px-4 py-2 bg-[var(--color-bg-card)] border-b border-[var(--color-divider)] text-[13px] text-[var(--color-text-secondary)]">
-              Search results for "{searchQuery}" in {currentPath}
+          {currentState.isSearching && (
+            <div className="px-4 py-2 bg-[var(--color-bg-elevated)] border-b border-[var(--color-divider)] text-[12px] text-[var(--color-text-secondary)]">
+              Search results for "<span className="text-[var(--color-accent)]">{currentState.searchQuery}</span>"
             </div>
           )}
 
           {/* Error */}
-          {error && (
-            <div className="px-4 py-3 bg-red-500/10 border-b border-red-500/20 text-red-400 text-[13px] flex items-center justify-between">
-              <span>{error}</span>
-              <button onClick={() => setError(null)} className="hover:text-red-300">✕</button>
+          {currentState.error && (
+            <div className="px-4 py-2 bg-[rgba(248,81,73,0.1)] border-b border-[var(--color-danger)]/20 text-[var(--color-danger)] text-[12px] flex items-center justify-between">
+              <span>{currentState.error}</span>
+              <button
+                onClick={() => updateTabState(activeTabId, { error: null })}
+                className="hover:opacity-70"
+              >
+                ✕
+              </button>
             </div>
           )}
 
           {/* Loading */}
-          {isLoading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-[var(--color-bg-mica)]/80 z-10">
-              <div className="text-[var(--color-text-secondary)]">Loading...</div>
+          {currentState.isLoading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-[var(--color-bg-surface)]/80 z-10">
+              <div className="flex items-center gap-2 text-[var(--color-text-secondary)]">
+                <div className="w-4 h-4 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
+                Loading...
+              </div>
             </div>
           )}
 
-          {/* File view */}
+          {/* Files */}
           {viewMode === 'grid' ? (
             <FileGrid
-              files={files}
-              selectedPath={selectedFile?.path || null}
+              files={currentState.files}
+              selectedPath={currentState.selectedFile?.path || null}
               onSelect={handleSelect}
               onOpen={handleOpen}
               onContextMenu={handleContextMenu}
             />
           ) : (
             <FileList
-              files={files}
-              selectedPath={selectedFile?.path || null}
+              files={currentState.files}
+              selectedPath={currentState.selectedFile?.path || null}
               onSelect={handleSelect}
               onOpen={handleOpen}
               onContextMenu={handleContextMenu}
@@ -413,12 +538,21 @@ function App() {
           )}
 
           {/* Status bar */}
-          <footer className="h-6 flex items-center px-4 bg-[var(--color-bg-card)] border-t border-[var(--color-border)] text-[11px] text-[var(--color-text-secondary)]">
-            <span>{files.length} items</span>
-            {selectedFile && (
-              <span className="ml-4 truncate">
-                {selectedFile.name}
-              </span>
+          <footer className="h-6 flex items-center px-4 bg-[var(--color-bg-base)] border-t border-[var(--color-border)] text-[11px] text-[var(--color-text-muted)]">
+            <span>{currentState.files.length} items</span>
+            {currentState.selectedFile && (
+              <>
+                <span className="mx-2">|</span>
+                <span className="truncate">{currentState.selectedFile.name}</span>
+              </>
+            )}
+            {clipboard && (
+              <>
+                <span className="flex-1" />
+                <span className="text-[var(--color-accent)]">
+                  {clipboard.operation === 'copy' ? 'Copied' : 'Cut'}: {clipboard.items.length} item(s)
+                </span>
+              </>
             )}
           </footer>
         </main>
@@ -429,7 +563,7 @@ function App() {
         <ContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
-          hasSelection={!!selectedFile}
+          hasSelection={!!currentState.selectedFile}
           hasClipboard={!!clipboard}
           isOnFile={!!contextMenu.file}
           onClose={() => setContextMenu(null)}
@@ -439,14 +573,14 @@ function App() {
           onPaste={() => { handlePaste(); setContextMenu(null); }}
           onRename={() => { setContextMenu(null); setDialog('rename'); }}
           onDelete={() => { setContextMenu(null); setDialog('delete'); }}
-          onOpen={() => { if (selectedFile) handleOpen(selectedFile); setContextMenu(null); }}
+          onOpen={() => { if (currentState.selectedFile) handleOpen(currentState.selectedFile); setContextMenu(null); }}
         />
       )}
 
       {/* Dialogs */}
       {dialog === 'newFolder' && (
         <InputDialog
-          title="New folder"
+          title="New Folder"
           placeholder="Folder name"
           confirmLabel="Create"
           onConfirm={handleNewFolder}
@@ -454,20 +588,20 @@ function App() {
         />
       )}
 
-      {dialog === 'rename' && selectedFile && (
+      {dialog === 'rename' && currentState.selectedFile && (
         <InputDialog
           title="Rename"
-          initialValue={selectedFile.name}
+          initialValue={currentState.selectedFile.name}
           confirmLabel="Rename"
           onConfirm={handleRename}
           onCancel={() => setDialog(null)}
         />
       )}
 
-      {dialog === 'delete' && selectedFile && (
+      {dialog === 'delete' && currentState.selectedFile && (
         <ConfirmDialog
           title="Delete"
-          message={`Are you sure you want to delete "${selectedFile.name}"? This action cannot be undone.`}
+          message={`Are you sure you want to delete "${currentState.selectedFile.name}"?`}
           confirmLabel="Delete"
           confirmDanger
           onConfirm={handleDelete}
