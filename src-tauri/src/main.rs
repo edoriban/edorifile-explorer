@@ -477,25 +477,53 @@ fn get_file_properties(path: String) -> Result<FileProperties, String> {
     })
 }
 
+// Window control commands for custom title bar
+#[tauri::command]
+async fn minimize_window(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.minimize().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn maximize_window(window: tauri::WebviewWindow) -> Result<(), String> {
+    if window.is_maximized().map_err(|e| e.to_string())? {
+        window.unmaximize().map_err(|e| e.to_string())
+    } else {
+        window.maximize().map_err(|e| e.to_string())
+    }
+}
+
+#[tauri::command]
+async fn close_window(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.close().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn is_maximized(window: tauri::WebviewWindow) -> Result<bool, String> {
+    window.is_maximized().map_err(|e| e.to_string())
+}
+
+// Show native Windows properties dialog
+#[tauri::command]
+fn show_native_properties(path: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        Command::new("powershell")
+            .args(["-Command", &format!(
+                "(New-Object -ComObject Shell.Application).NameSpace(0).ParseName('{}').InvokeVerb('properties')",
+                path.replace("'", "''")
+            )])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_clipboard_manager::init())
-        .setup(|app| {
-            #[cfg(target_os = "windows")]
-            {
-                use tauri::Manager;
-                use window_vibrancy::{apply_acrylic, apply_mica};
-
-                let window = app.get_webview_window("main").unwrap();
-
-                // Try to apply Mica, fallback to Acrylic
-                let _ = apply_mica(&window, None)
-                    .or_else(|_| apply_acrylic(&window, Some((0, 0, 0, 10))));
-            }
-            Ok(())
-        })
         .invoke_handler(tauri::generate_handler![
             read_directory,
             get_drives,
@@ -508,7 +536,12 @@ fn main() {
             copy_item,
             move_item,
             open_in_terminal,
-            get_file_properties
+            get_file_properties,
+            minimize_window,
+            maximize_window,
+            close_window,
+            is_maximized,
+            show_native_properties
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
