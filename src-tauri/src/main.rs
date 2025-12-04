@@ -387,10 +387,115 @@ fn move_item(source: String, destination: String) -> Result<String, String> {
     Ok(dest_path.to_string_lossy().to_string())
 }
 
+/// Open terminal at specific path
+#[tauri::command]
+fn open_in_terminal(path: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        Command::new("cmd")
+            .args([
+                "/C",
+                "start",
+                "powershell",
+                "-NoExit",
+                "-Command",
+                &format!("cd '{}'", path),
+            ])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        return Err("Not supported on this OS".to_string());
+    }
+    Ok(())
+}
+
+#[derive(serde::Serialize)]
+struct FileProperties {
+    created: String,
+    accessed: String,
+    modified: String,
+    readonly: bool,
+    hidden: bool,
+}
+
+/// Get detailed file properties
+#[tauri::command]
+fn get_file_properties(path: String) -> Result<FileProperties, String> {
+    let metadata = fs::metadata(&path).map_err(|e| e.to_string())?;
+
+    let created = metadata
+        .created()
+        .map(|t| {
+            chrono::DateTime::<chrono::Local>::from(t)
+                .format("%Y-%m-%d %H:%M:%S")
+                .to_string()
+        })
+        .unwrap_or_default();
+
+    let accessed = metadata
+        .accessed()
+        .map(|t| {
+            chrono::DateTime::<chrono::Local>::from(t)
+                .format("%Y-%m-%d %H:%M:%S")
+                .to_string()
+        })
+        .unwrap_or_default();
+
+    let modified = metadata
+        .modified()
+        .map(|t| {
+            chrono::DateTime::<chrono::Local>::from(t)
+                .format("%Y-%m-%d %H:%M:%S")
+                .to_string()
+        })
+        .unwrap_or_default();
+
+    let permissions = metadata.permissions();
+    let readonly = permissions.readonly();
+
+    // Check for hidden attribute on Windows
+    let hidden = {
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::fs::MetadataExt;
+            let attributes = metadata.file_attributes();
+            (attributes & 0x2) != 0
+        }
+        #[cfg(not(target_os = "windows"))]
+        false
+    };
+
+    Ok(FileProperties {
+        created,
+        accessed,
+        modified,
+        readonly,
+        hidden,
+    })
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
+        .setup(|app| {
+            #[cfg(target_os = "windows")]
+            {
+                use tauri::Manager;
+                use window_vibrancy::{apply_acrylic, apply_mica};
+
+                let window = app.get_webview_window("main").unwrap();
+
+                // Try to apply Mica, fallback to Acrylic
+                let _ = apply_mica(&window, None)
+                    .or_else(|_| apply_acrylic(&window, Some((0, 0, 0, 10))));
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             read_directory,
             get_drives,
@@ -401,7 +506,9 @@ fn main() {
             rename_item,
             delete_item,
             copy_item,
-            move_item
+            move_item,
+            open_in_terminal,
+            get_file_properties
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

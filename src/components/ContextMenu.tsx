@@ -5,7 +5,9 @@ import {
     PasteIcon,
     RenameIcon,
     DeleteIcon,
-    NewFolderIcon
+    NewFolderIcon,
+    CodeIcon,
+    DocumentIcon
 } from '../utils/icons';
 
 interface ContextMenuProps {
@@ -22,6 +24,9 @@ interface ContextMenuProps {
     onRename: () => void;
     onDelete: () => void;
     onOpen: () => void;
+    onOpenInTerminal: () => void;
+    onCopyPath: () => void;
+    onProperties: () => void;
 }
 
 export const ContextMenu: FC<ContextMenuProps> = ({
@@ -38,141 +43,124 @@ export const ContextMenu: FC<ContextMenuProps> = ({
     onRename,
     onDelete,
     onOpen,
+    onOpenInTerminal,
+    onCopyPath,
+    onProperties,
 }) => {
     const menuRef = useRef<HTMLDivElement>(null);
 
+    // Close on click outside
     useEffect(() => {
-        const handleClickOutside = (e: MouseEvent) => {
+        const handleClick = (e: MouseEvent) => {
             if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
                 onClose();
             }
         };
-
-        const handleEscape = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') onClose();
-        };
-
-        document.addEventListener('mousedown', handleClickOutside);
-        document.addEventListener('keydown', handleEscape);
-
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-            document.removeEventListener('keydown', handleEscape);
-        };
+        document.addEventListener('mousedown', handleClick);
+        return () => document.removeEventListener('mousedown', handleClick);
     }, [onClose]);
 
-    // Adjust position to keep menu in viewport
-    useEffect(() => {
-        if (menuRef.current) {
-            const rect = menuRef.current.getBoundingClientRect();
-            const viewportWidth = window.innerWidth;
-            const viewportHeight = window.innerHeight;
+    // Adjust position to keep in viewport
+    const style = {
+        top: y,
+        left: x,
+    };
 
-            if (rect.right > viewportWidth) {
-                menuRef.current.style.left = `${x - rect.width}px`;
-            }
-            if (rect.bottom > viewportHeight) {
-                menuRef.current.style.top = `${y - rect.height}px`;
-            }
+    if (menuRef.current) {
+        const rect = menuRef.current.getBoundingClientRect();
+        if (y + rect.height > window.innerHeight) {
+            style.top = y - rect.height;
         }
-    }, [x, y]);
-
-    const MenuItem: FC<{
-        icon: React.ReactNode;
-        label: string;
-        shortcut?: string;
-        onClick: () => void;
-        disabled?: boolean;
-        danger?: boolean;
-    }> = ({ icon, label, shortcut, onClick, disabled, danger }) => (
-        <button
-            onClick={() => {
-                if (!disabled) {
-                    onClick();
-                    onClose();
-                }
-            }}
-            disabled={disabled}
-            className={`w-full flex items-center gap-3 px-3 py-2 text-[13px] transition-colors
-        ${disabled
-                    ? 'opacity-40 cursor-not-allowed'
-                    : danger
-                        ? 'hover:bg-red-500/10 text-[var(--color-danger)]'
-                        : 'hover:bg-[var(--color-bg-card-hover)]'
-                }`}
-        >
-            <span className="w-5 flex justify-center">{icon}</span>
-            <span className="flex-1 text-left">{label}</span>
-            {shortcut && (
-                <span className="text-[11px] text-[var(--color-text-tertiary)]">{shortcut}</span>
-            )}
-        </button>
-    );
+        if (x + rect.width > window.innerWidth) {
+            style.left = x - rect.width;
+        }
+    }
 
     return (
         <div
             ref={menuRef}
-            className="context-menu"
-            style={{ left: x, top: y }}
+            className="context-menu flex flex-col gap-1 min-w-[240px]"
+            style={style}
+            onClick={(e) => e.stopPropagation()}
         >
+            {/* Primary Actions */}
             {isOnFile && (
                 <>
-                    <MenuItem
-                        icon={<span className="text-base">📂</span>}
-                        label="Open"
-                        onClick={onOpen}
-                    />
+                    <button onClick={onOpen} className="context-menu-item font-semibold">
+                        <span className="w-5 flex justify-center"><DocumentIcon size={16} /></span>
+                        Open
+                    </button>
                     <div className="context-menu-divider" />
                 </>
             )}
 
-            <MenuItem
-                icon={<CutIcon size={16} />}
-                label="Cut"
-                shortcut="Ctrl+X"
-                onClick={onCut}
-                disabled={!hasSelection}
-            />
-            <MenuItem
-                icon={<CopyIcon size={16} />}
-                label="Copy"
-                shortcut="Ctrl+C"
-                onClick={onCopy}
-                disabled={!hasSelection}
-            />
-            <MenuItem
-                icon={<PasteIcon size={16} />}
-                label="Paste"
-                shortcut="Ctrl+V"
-                onClick={onPaste}
-                disabled={!hasClipboard}
-            />
+            {/* File Operations */}
+            <button onClick={onCut} disabled={!hasSelection} className="context-menu-item">
+                <span className="w-5 flex justify-center"><CutIcon size={16} /></span>
+                Cut
+                <span className="shortcut">Ctrl+X</span>
+            </button>
+            <button onClick={onCopy} disabled={!hasSelection} className="context-menu-item">
+                <span className="w-5 flex justify-center"><CopyIcon size={16} /></span>
+                Copy
+                <span className="shortcut">Ctrl+C</span>
+            </button>
+            <button onClick={onPaste} disabled={!hasClipboard} className="context-menu-item">
+                <span className="w-5 flex justify-center"><PasteIcon size={16} /></span>
+                Paste
+                <span className="shortcut">Ctrl+V</span>
+            </button>
 
             <div className="context-menu-divider" />
 
-            <MenuItem
-                icon={<NewFolderIcon size={16} />}
-                label="New folder"
-                shortcut="Ctrl+Shift+N"
-                onClick={onNewFolder}
-            />
+            {/* Advanced Actions */}
+            <button onClick={onOpenInTerminal} className="context-menu-item">
+                <span className="w-5 flex justify-center"><CodeIcon size={16} /></span>
+                Open in Terminal
+            </button>
 
-            {hasSelection && (
+            {isOnFile && (
+                <button onClick={onCopyPath} className="context-menu-item">
+                    <span className="w-5 flex justify-center">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                            <path d="M13.8284 10.1716L16.6569 7.34315C17.4379 6.5621 18.7043 6.5621 19.4853 7.34315C20.2663 8.1242 20.2663 9.39052 19.4853 10.1716L16.6569 13M10.1716 13.8284L7.34315 16.6569C6.5621 17.4379 5.29577 17.4379 4.51472 16.6569C3.73367 15.8758 3.73367 14.6095 4.51472 13.8284L7.34315 11" strokeLinecap="round" />
+                        </svg>
+                    </span>
+                    Copy as path
+                </button>
+            )}
+
+            <div className="context-menu-divider" />
+
+            {/* Management */}
+            <button onClick={onNewFolder} className="context-menu-item">
+                <span className="w-5 flex justify-center"><NewFolderIcon size={16} /></span>
+                New folder
+                <span className="shortcut">Ctrl+Shift+N</span>
+            </button>
+            <button onClick={onRename} disabled={!hasSelection} className="context-menu-item">
+                <span className="w-5 flex justify-center"><RenameIcon size={16} /></span>
+                Rename
+                <span className="shortcut">F2</span>
+            </button>
+            <button onClick={onDelete} disabled={!hasSelection} className="context-menu-item danger">
+                <span className="w-5 flex justify-center"><DeleteIcon size={16} /></span>
+                Delete
+                <span className="shortcut">Del</span>
+            </button>
+
+            {isOnFile && (
                 <>
                     <div className="context-menu-divider" />
-                    <MenuItem
-                        icon={<RenameIcon size={16} />}
-                        label="Rename"
-                        shortcut="F2"
-                        onClick={onRename}
-                    />
-                    <MenuItem
-                        icon={<DeleteIcon size={16} />}
-                        label="Delete"
-                        shortcut="Del"
-                        onClick={onDelete}
-                        danger
-                    />
+                    <button onClick={onProperties} className="context-menu-item">
+                        <span className="w-5 flex justify-center">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                <circle cx="12" cy="12" r="10" />
+                                <path d="M12 16V12M12 8H12.01" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                        </span>
+                        Properties
+                    </button>
                 </>
             )}
         </div>

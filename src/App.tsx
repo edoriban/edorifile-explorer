@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { open } from '@tauri-apps/plugin-shell';
+import { openPath } from '@tauri-apps/plugin-opener';
+import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import './App.css';
 
 import { FileEntry, DriveInfo, ViewMode } from './types';
@@ -11,6 +12,7 @@ import { FileGrid } from './components/FileGrid';
 import { FileList } from './components/FileList';
 import { ContextMenu } from './components/ContextMenu';
 import { InputDialog, ConfirmDialog } from './components/Dialog';
+import { PropertiesDialog } from './components/PropertiesDialog';
 
 // Generate unique ID
 const generateId = () => Math.random().toString(36).substring(2, 9);
@@ -35,7 +37,7 @@ interface ClipboardState {
   operation: 'copy' | 'cut';
 }
 
-type DialogType = 'newFolder' | 'rename' | 'delete' | null;
+type DialogType = 'newFolder' | 'rename' | 'delete' | 'properties' | null;
 
 function App() {
   // Global state
@@ -348,7 +350,7 @@ function App() {
       navigateTo(file.path);
     } else {
       try {
-        await open(file.path);
+        await openPath(file.path);
       } catch (err) {
         console.error('Failed to open file:', err);
         updateTabState(activeTabId, { error: `Failed to open: ${err}` });
@@ -439,6 +441,31 @@ function App() {
     }
   }, [currentState.selectedFile, refresh, activeTabId, updateTabState]);
 
+  // Advanced Actions
+  const handleOpenInTerminal = useCallback(async () => {
+    const path = currentState.selectedFile?.is_dir
+      ? currentState.selectedFile.path
+      : currentState.path;
+
+    try {
+      await invoke('open_in_terminal', { path });
+      setContextMenu(null);
+    } catch (err) {
+      updateTabState(activeTabId, { error: String(err) });
+    }
+  }, [currentState, activeTabId, updateTabState]);
+
+  const handleCopyPath = useCallback(async () => {
+    if (currentState.selectedFile) {
+      try {
+        await writeText(currentState.selectedFile.path);
+        setContextMenu(null);
+      } catch (err) {
+        console.error('Failed to copy path:', err);
+      }
+    }
+  }, [currentState.selectedFile]);
+
   return (
     <div className="h-screen flex flex-col bg-[var(--color-bg-base)]">
       {/* Tab Bar */}
@@ -485,7 +512,7 @@ function App() {
 
         {/* Main content */}
         <main
-          className="flex-1 flex flex-col overflow-hidden bg-[var(--color-bg-surface)]"
+          className="flex-1 flex flex-col overflow-hidden file-area"
           onContextMenu={handleBackgroundContextMenu}
         >
           {/* Search indicator */}
@@ -574,6 +601,9 @@ function App() {
           onRename={() => { setContextMenu(null); setDialog('rename'); }}
           onDelete={() => { setContextMenu(null); setDialog('delete'); }}
           onOpen={() => { if (currentState.selectedFile) handleOpen(currentState.selectedFile); setContextMenu(null); }}
+          onOpenInTerminal={handleOpenInTerminal}
+          onCopyPath={handleCopyPath}
+          onProperties={() => { setContextMenu(null); setDialog('properties'); }}
         />
       )}
 
@@ -606,6 +636,13 @@ function App() {
           confirmDanger
           onConfirm={handleDelete}
           onCancel={() => setDialog(null)}
+        />
+      )}
+
+      {dialog === 'properties' && currentState.selectedFile && (
+        <PropertiesDialog
+          file={currentState.selectedFile}
+          onClose={() => setDialog(null)}
         />
       )}
     </div>

@@ -73,11 +73,11 @@ const ActionButton: FC<ActionButtonProps> = ({ icon, label, onClick, disabled, d
         onClick={onClick}
         disabled={disabled}
         title={label}
-        className={`px-2.5 py-1.5 flex items-center gap-2 rounded-[var(--radius-md)] text-[12px] transition-all
+        className={`px-3 py-1.5 flex items-center gap-2 rounded-[var(--radius-md)] text-[12px] transition-all font-medium
       ${disabled
                 ? 'opacity-30 cursor-not-allowed'
                 : danger
-                    ? 'text-[var(--color-text-secondary)] hover:text-[var(--color-danger)] hover:bg-[rgba(248,81,73,0.1)]'
+                    ? 'text-[var(--color-text-secondary)] hover:text-[var(--color-danger)] hover:bg-[rgba(239,68,68,0.1)]'
                     : 'text-[var(--color-text-secondary)] hover:text-[var(--color-accent)] hover:bg-[var(--color-bg-hover)]'
             }`}
     >
@@ -138,22 +138,19 @@ export const Toolbar: FC<ToolbarProps> = ({
     const breadcrumbs = currentPath.split('\\').filter(Boolean);
 
     return (
-        <header className="bg-[var(--color-bg-surface)] border-b border-[var(--color-border)]">
-            {/* Main toolbar row */}
-            <div className="h-11 flex items-center gap-2 px-3">
+        <div className="flex flex-col">
+            {/* Main toolbar row (Navigation + Address + Search) */}
+            <header className="toolbar">
                 {/* Navigation */}
-                <div className="flex items-center gap-0.5">
-                    <NavButton icon={<ChevronLeftIcon size={16} />} onClick={onBack} disabled={!canGoBack} title="Back" />
-                    <NavButton icon={<ChevronRightIcon size={16} />} onClick={onForward} disabled={!canGoForward} title="Forward" />
-                    <NavButton icon={<ChevronUpIcon size={16} />} onClick={onUp} title="Up" />
+                <div className="flex items-center gap-1">
+                    <NavButton icon={<ChevronLeftIcon size={18} />} onClick={onBack} disabled={!canGoBack} title="Back" />
+                    <NavButton icon={<ChevronRightIcon size={18} />} onClick={onForward} disabled={!canGoForward} title="Forward" />
+                    <NavButton icon={<ChevronUpIcon size={18} />} onClick={onUp} title="Up" />
                     <NavButton icon={<RefreshIcon size={16} />} onClick={onRefresh} title="Refresh" />
                 </div>
 
-                {/* Separator */}
-                <div className="w-px h-5 bg-[var(--color-divider)]" />
-
                 {/* Breadcrumb / Path */}
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 mx-2">
                     {isEditing ? (
                         <form onSubmit={handlePathSubmit} className="w-full">
                             <input
@@ -168,8 +165,7 @@ export const Toolbar: FC<ToolbarProps> = ({
                                     }, 150);
                                 }}
                                 onKeyDown={handlePathKeyDown}
-                                className="w-full h-7 px-3 text-[13px] bg-[var(--color-bg-base)] border border-[var(--color-accent)] 
-                  rounded-[var(--radius-md)] text-[var(--color-text-primary)]"
+                                className="address-bar w-full text-[13px] text-[var(--color-text-primary)]"
                                 autoFocus
                                 spellCheck={false}
                             />
@@ -177,97 +173,92 @@ export const Toolbar: FC<ToolbarProps> = ({
                     ) : (
                         <div
                             onClick={() => setIsEditing(true)}
-                            className="h-7 flex items-center gap-0.5 px-2 bg-[var(--color-bg-base)] rounded-[var(--radius-md)] 
-                border border-[var(--color-border)] hover:border-[var(--color-border-hover)] 
-                cursor-text transition-colors overflow-hidden"
+                            className="address-bar cursor-text overflow-hidden"
                         >
-                            {breadcrumbs.map((segment, index) => (
-                                <div key={index} className="flex items-center flex-shrink-0">
-                                    {index > 0 && (
-                                        <ChevronRightIcon size={12} className="mx-0.5 text-[var(--color-text-muted)] flex-shrink-0" />
-                                    )}
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            const path = breadcrumbs.slice(0, index + 1).join('\\') + '\\';
-                                            onNavigate(path);
-                                        }}
-                                        className="px-1.5 py-0.5 text-[12px] text-[var(--color-text-secondary)] rounded 
-                      hover:text-[var(--color-accent)] hover:bg-[var(--color-bg-hover)] transition-colors"
-                                    >
-                                        {segment}
-                                    </button>
+                            <div className="flex items-center h-full">
+                                <div className="flex items-center px-1 text-[var(--color-text-muted)] mr-1">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                                        <path d="M3 12H21M3 6H21M3 18H21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                    </svg>
                                 </div>
-                            ))}
+                                {breadcrumbs.map((segment, index) => (
+                                    <div key={index} className="flex items-center flex-shrink-0">
+                                        {index > 0 && (
+                                            <ChevronRightIcon size={12} className="mx-1 text-[var(--color-text-muted)] flex-shrink-0" />
+                                        )}
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                const path = breadcrumbs.slice(0, index + 1).join('\\') + '\\';
+                                                onNavigate(path);
+                                            }}
+                                            className="px-1.5 py-0.5 text-[13px] text-[var(--color-text-secondary)] rounded-[var(--radius-sm)]
+                        hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-hover)] transition-colors"
+                                        >
+                                            {segment}
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     )}
                 </div>
 
                 {/* Search */}
-                <div className="relative w-48">
-                    <SearchIcon size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
+                <div className="relative w-56">
+                    <SearchIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
                     <input
                         type="text"
                         value={searchQuery}
                         onChange={(e) => onSearchChange(e.target.value)}
-                        placeholder="Search..."
-                        className="w-full h-7 pl-8 pr-3 text-[12px] bg-[var(--color-bg-base)] border border-[var(--color-border)] 
-              rounded-[var(--radius-md)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]
-              focus:border-[var(--color-accent)] transition-colors"
+                        placeholder="Search"
+                        className="address-bar w-full pl-9 pr-3 text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]"
                     />
                 </div>
-            </div>
+            </header>
 
-            {/* Actions row */}
-            <div className="h-9 flex items-center gap-1 px-3 border-t border-[var(--color-divider)]">
-                {/* Create */}
+            {/* Command Bar (New, Cut, Copy, etc.) */}
+            <div className="h-10 flex items-center gap-1 px-3 bg-[var(--color-bg-surface)] border-b border-[var(--color-border)]">
                 <ActionButton
-                    icon={<NewFolderIcon size={15} />}
-                    label="New Folder"
+                    icon={<NewFolderIcon size={16} />}
+                    label="New"
                     onClick={onNewFolder}
                 />
 
-                {/* Separator */}
-                <div className="w-px h-4 bg-[var(--color-divider)] mx-1" />
+                <div className="w-px h-5 bg-[var(--color-border)] mx-2" />
 
-                {/* Edit actions */}
-                <ActionButton icon={<CutIcon size={15} />} label="Cut" onClick={onCut} disabled={!hasSelection} />
-                <ActionButton icon={<CopyIcon size={15} />} label="Copy" onClick={onCopy} disabled={!hasSelection} />
-                <ActionButton icon={<PasteIcon size={15} />} label="Paste" onClick={onPaste} disabled={!hasClipboard} />
+                <ActionButton icon={<CutIcon size={16} />} label="Cut" onClick={onCut} disabled={!hasSelection} />
+                <ActionButton icon={<CopyIcon size={16} />} label="Copy" onClick={onCopy} disabled={!hasSelection} />
+                <ActionButton icon={<PasteIcon size={16} />} label="Paste" onClick={onPaste} disabled={!hasClipboard} />
+                <ActionButton icon={<RenameIcon size={16} />} label="Rename" onClick={onRename} disabled={!hasSelection} />
+                <ActionButton icon={<DeleteIcon size={16} />} label="Delete" onClick={onDelete} disabled={!hasSelection} danger />
 
-                {/* Separator */}
-                <div className="w-px h-4 bg-[var(--color-divider)] mx-1" />
-
-                <ActionButton icon={<RenameIcon size={15} />} label="Rename" onClick={onRename} disabled={!hasSelection} />
-                <ActionButton icon={<DeleteIcon size={15} />} label="Delete" onClick={onDelete} disabled={!hasSelection} danger />
-
-                {/* Spacer */}
                 <div className="flex-1" />
 
                 {/* View toggle */}
-                <div className="flex items-center gap-0.5 p-0.5 bg-[var(--color-bg-base)] rounded-[var(--radius-md)]">
+                <div className="flex items-center gap-1">
                     <button
                         onClick={() => onViewModeChange('list')}
-                        className={`w-7 h-6 flex items-center justify-center rounded transition-colors ${viewMode === 'list'
+                        className={`w-8 h-8 flex items-center justify-center rounded-[var(--radius-md)] transition-colors ${viewMode === 'list'
                                 ? 'bg-[var(--color-bg-hover)] text-[var(--color-accent)]'
                                 : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
                             }`}
                         title="List view"
                     >
-                        <ListIcon size={14} />
+                        <ListIcon size={16} />
                     </button>
                     <button
                         onClick={() => onViewModeChange('grid')}
-                        className={`w-7 h-6 flex items-center justify-center rounded transition-colors ${viewMode === 'grid'
+                        className={`w-8 h-8 flex items-center justify-center rounded-[var(--radius-md)] transition-colors ${viewMode === 'grid'
                                 ? 'bg-[var(--color-bg-hover)] text-[var(--color-accent)]'
                                 : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
                             }`}
                         title="Grid view"
                     >
-                        <GridIcon size={14} />
+                        <GridIcon size={16} />
                     </button>
                 </div>
             </div>
-        </header>
+        </div>
     );
 };
