@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { openPath } from '@tauri-apps/plugin-opener';
-import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import './App.css';
 
 import { FileEntry, DriveInfo, ViewMode } from './types';
@@ -10,7 +10,6 @@ import { Sidebar } from './components/Sidebar';
 import { Toolbar } from './components/Toolbar';
 import { FileGrid } from './components/FileGrid';
 import { FileList } from './components/FileList';
-import { ContextMenu } from './components/ContextMenu';
 import { InputDialog, ConfirmDialog } from './components/Dialog';
 import { PropertiesDialog } from './components/PropertiesDialog';
 
@@ -52,11 +51,9 @@ function App() {
   const [tabStates, setTabStates] = useState<Record<string, TabState>>({});
 
   // UI
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; file: FileEntry | null } | null>(null);
   const [dialog, setDialog] = useState<DialogType>(null);
 
   // Get current tab state
-  const currentTab = tabs.find(t => t.id === activeTabId)!;
   const currentState = tabStates[activeTabId] || {
     path: 'C:\\',
     title: 'C:',
@@ -115,6 +112,7 @@ function App() {
     };
     init();
   }, []);
+
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -218,7 +216,6 @@ function App() {
       };
     });
 
-    setContextMenu(null);
     loadDirectoryForTab(activeTabId, path);
   }, [activeTabId, loadDirectoryForTab]);
 
@@ -358,17 +355,47 @@ function App() {
     }
   }, [navigateTo, activeTabId, updateTabState]);
 
-  // Context menu
-  const handleContextMenu = useCallback((e: React.MouseEvent, file: FileEntry) => {
-    e.preventDefault();
-    updateTabState(activeTabId, { selectedFile: file });
-    setContextMenu({ x: e.clientX, y: e.clientY, file });
-  }, [activeTabId, updateTabState]);
+  // Context menu - keep reference to selected file for menu actions
+  const contextFileRef = useRef<FileEntry | null>(null);
 
-  const handleBackgroundContextMenu = useCallback((e: React.MouseEvent) => {
+  const handleContextMenu = useCallback(async (e: React.MouseEvent, file: FileEntry) => {
     e.preventDefault();
-    setContextMenu({ x: e.clientX, y: e.clientY, file: null });
-  }, []);
+    e.stopPropagation();
+    updateTabState(activeTabId, { selectedFile: file });
+    contextFileRef.current = file;
+
+    // Call native Tauri context menu
+    try {
+      await invoke('show_context_menu', {
+        x: e.clientX,
+        y: e.clientY,
+        filePath: file.path,
+        isFile: !file.is_dir,
+        hasClipboard: !!clipboard,
+      });
+    } catch (err) {
+      console.error('Failed to show context menu:', err);
+    }
+  }, [activeTabId, updateTabState, clipboard]);
+
+  const handleBackgroundContextMenu = useCallback(async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    contextFileRef.current = null;
+
+    // Call native Tauri context menu for background
+    try {
+      await invoke('show_context_menu', {
+        x: e.clientX,
+        y: e.clientY,
+        filePath: null,
+        isFile: false,
+        hasClipboard: !!clipboard,
+      });
+    } catch (err) {
+      console.error('Failed to show context menu:', err);
+    }
+  }, [clipboard]);
 
   // File operations
   const handleCopy = useCallback(() => {
@@ -441,30 +468,60 @@ function App() {
     }
   }, [currentState.selectedFile, refresh, activeTabId, updateTabState]);
 
-  // Advanced Actions
-  const handleOpenInTerminal = useCallback(async () => {
-    const path = currentState.selectedFile?.is_dir
-      ? currentState.selectedFile.path
-      : currentState.path;
+  // Listen for native context menu actions from Tauri
+  useEffect(() => {
+    let unlistenFn: (() => void) | null = null;
 
-    try {
-      await invoke('open_in_terminal', { path });
-      setContextMenu(null);
-    } catch (err) {
-      updateTabState(activeTabId, { error: String(err) });
-    }
-  }, [currentState, activeTabId, updateTabState]);
+    listen<string>('context-menu-action', async (event) => {
+      const action = event.payload;
+      const file = contextFileRef.current;
 
-  const handleCopyPath = useCallback(async () => {
-    if (currentState.selectedFile) {
-      try {
-        await writeText(currentState.selectedFile.path);
-        setContextMenu(null);
-      } catch (err) {
-        console.error('Failed to copy path:', err);
+      console.log('[ContextMenu] Action received:', action, 'File:', file?.name);
+
+      switch (action) {
+        case 'open':
+          console.log('[ContextMenu] Opening file:', file?.path);
+          if (file) handleOpen(file);
+          break;
+        case 'cut':
+          if (file) handleCut();
+          break;
+        case 'copy':
+          if (file) handleCopy();
+          break;
+        case 'paste':
+          handlePaste();
+          break;
+        case 'new_folder':
+          setDialog('newFolder');
+          break;
+        case 'rename':
+          if (file) setDialog('rename');
+          break;
+        case 'delete':
+          if (file) setDialog('delete');
+          break;
+        case 'open_terminal':
+          try {
+            await invoke('open_in_terminal', { path: file?.is_dir ? file.path : currentState.path });
+          } catch (err) {
+            console.error('Failed to open terminal:', err);
+          }
+          break;
+        case 'properties':
+          if (file) {
+            try {
+              await invoke('show_native_properties', { path: file.path });
+            } catch (err) {
+              console.error('Failed to show properties:', err);
+            }
+          }
+          break;
       }
-    }
-  }, [currentState.selectedFile]);
+    }).then(fn => { unlistenFn = fn; });
+
+    return () => { if (unlistenFn) unlistenFn(); };
+  }, [handleOpen, handleCut, handleCopy, handlePaste, currentState.path]);
 
   return (
     <div className="h-screen flex flex-col bg-[var(--color-bg-base)]">
@@ -585,27 +642,7 @@ function App() {
         </main>
       </div>
 
-      {/* Context Menu */}
-      {contextMenu && (
-        <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          hasSelection={!!currentState.selectedFile}
-          hasClipboard={!!clipboard}
-          isOnFile={!!contextMenu.file}
-          onClose={() => setContextMenu(null)}
-          onNewFolder={() => { setContextMenu(null); setDialog('newFolder'); }}
-          onCut={() => { handleCut(); setContextMenu(null); }}
-          onCopy={() => { handleCopy(); setContextMenu(null); }}
-          onPaste={() => { handlePaste(); setContextMenu(null); }}
-          onRename={() => { setContextMenu(null); setDialog('rename'); }}
-          onDelete={() => { setContextMenu(null); setDialog('delete'); }}
-          onOpen={() => { if (currentState.selectedFile) handleOpen(currentState.selectedFile); setContextMenu(null); }}
-          onOpenInTerminal={handleOpenInTerminal}
-          onCopyPath={handleCopyPath}
-          onProperties={() => { setContextMenu(null); setDialog('properties'); }}
-        />
-      )}
+      {/* Native context menu is handled via invoke('show_context_menu') */}
 
       {/* Dialogs */}
       {dialog === 'newFolder' && (

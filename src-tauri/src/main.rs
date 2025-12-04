@@ -519,11 +519,114 @@ fn show_native_properties(path: String) -> Result<(), String> {
     Ok(())
 }
 
+// Native context menu using tauri::menu
+#[tauri::command]
+async fn show_context_menu(
+    app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
+    _x: f64,
+    _y: f64,
+    file_path: Option<String>,
+    is_file: bool,
+    has_clipboard: bool,
+) -> Result<(), String> {
+    use tauri::menu::{ContextMenu, MenuBuilder, MenuItemBuilder};
+
+    let mut menu_builder = MenuBuilder::new(&app);
+
+    // If clicking on a file/folder, show "Open" first
+    if file_path.is_some() && is_file {
+        menu_builder = menu_builder
+            .item(
+                &MenuItemBuilder::with_id("open", "Open")
+                    .build(&app)
+                    .map_err(|e| e.to_string())?,
+            )
+            .separator();
+    }
+
+    // File operations
+    menu_builder = menu_builder
+        .item(
+            &MenuItemBuilder::with_id("cut", "Cut")
+                .accelerator("Ctrl+X")
+                .enabled(file_path.is_some())
+                .build(&app)
+                .map_err(|e| e.to_string())?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("copy", "Copy")
+                .accelerator("Ctrl+C")
+                .enabled(file_path.is_some())
+                .build(&app)
+                .map_err(|e| e.to_string())?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("paste", "Paste")
+                .accelerator("Ctrl+V")
+                .enabled(has_clipboard)
+                .build(&app)
+                .map_err(|e| e.to_string())?,
+        )
+        .separator()
+        .item(
+            &MenuItemBuilder::with_id("open_terminal", "Open in Terminal")
+                .build(&app)
+                .map_err(|e| e.to_string())?,
+        )
+        .separator()
+        .item(
+            &MenuItemBuilder::with_id("new_folder", "New folder")
+                .accelerator("Ctrl+Shift+N")
+                .build(&app)
+                .map_err(|e| e.to_string())?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("rename", "Rename")
+                .accelerator("F2")
+                .enabled(file_path.is_some())
+                .build(&app)
+                .map_err(|e| e.to_string())?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("delete", "Delete")
+                .accelerator("Delete")
+                .enabled(file_path.is_some())
+                .build(&app)
+                .map_err(|e| e.to_string())?,
+        );
+
+    // Properties only for files
+    if file_path.is_some() {
+        menu_builder = menu_builder.separator().item(
+            &MenuItemBuilder::with_id("properties", "Properties")
+                .build(&app)
+                .map_err(|e| e.to_string())?,
+        );
+    }
+
+    let menu = menu_builder.build().map_err(|e| e.to_string())?;
+
+    // Show menu at cursor position using popup
+    menu.popup(window.as_ref().window())
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
 fn main() {
+    use tauri::Emitter;
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .on_menu_event(|app, event| {
+            // Handle menu item clicks - emit to frontend
+            let action_id = event.id().0.as_str();
+            println!("[ContextMenu] Menu action clicked: {}", action_id);
+            let _ = app.emit("context-menu-action", action_id);
+        })
         .invoke_handler(tauri::generate_handler![
             read_directory,
             get_drives,
@@ -541,7 +644,8 @@ fn main() {
             maximize_window,
             close_window,
             is_maximized,
-            show_native_properties
+            show_native_properties,
+            show_context_menu
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
