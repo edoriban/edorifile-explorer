@@ -8,15 +8,26 @@ import { Sidebar } from './components/Sidebar';
 import { Toolbar } from './components/Toolbar';
 import { FileGrid } from './components/FileGrid';
 import { FileList } from './components/FileList';
+import { ContextMenu } from './components/ContextMenu';
+import { InputDialog, ConfirmDialog } from './components/Dialog';
+
+// Clipboard state for copy/cut operations
+interface ClipboardState {
+  items: FileEntry[];
+  operation: 'copy' | 'cut';
+}
+
+// Dialog state
+type DialogType = 'newFolder' | 'rename' | 'delete' | null;
 
 function App() {
-  // State
+  // Core state
   const [currentPath, setCurrentPath] = useState<string>('C:\\');
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [drives, setDrives] = useState<DriveInfo[]>([]);
   const [quickAccess, setQuickAccess] = useState<FileEntry[]>([]);
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [selectedFile, setSelectedFile] = useState<FileEntry | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +37,16 @@ function App() {
   const [history, setHistory] = useState<string[]>(['C:\\']);
   const [historyIndex, setHistoryIndex] = useState(0);
 
-  // Load drives and quick access on mount
+  // Clipboard
+  const [clipboard, setClipboard] = useState<ClipboardState | null>(null);
+
+  // Context menu
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; file: FileEntry | null } | null>(null);
+
+  // Dialogs
+  const [dialog, setDialog] = useState<DialogType>(null);
+
+  // Initialize
   useEffect(() => {
     const init = async () => {
       try {
@@ -37,28 +57,77 @@ function App() {
         setDrives(drivesData);
         setQuickAccess(quickAccessData);
 
-        // Start in user's home directory if available
+        // Start in user profile
         if (quickAccessData.length > 0) {
-          const desktopFolder = quickAccessData.find(f => f.name === 'Desktop');
-          if (desktopFolder) {
-            navigateTo(desktopFolder.path, true);
+          const firstFolder = quickAccessData[0];
+          if (firstFolder) {
+            // Go to parent of Desktop (user folder)
+            const userPath = firstFolder.path.replace('\\Desktop', '');
+            navigateTo(userPath, true);
           }
         }
       } catch (err) {
         console.error('Failed to initialize:', err);
+        loadDirectory('C:\\');
       }
     };
     init();
   }, []);
 
-  // Load directory contents
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't handle if dialog is open
+      if (dialog) return;
+
+      if (e.ctrlKey) {
+        switch (e.key.toLowerCase()) {
+          case 'c':
+            if (selectedFile) handleCopy();
+            break;
+          case 'x':
+            if (selectedFile) handleCut();
+            break;
+          case 'v':
+            if (clipboard) handlePaste();
+            break;
+          case 'n':
+            if (e.shiftKey) {
+              e.preventDefault();
+              setDialog('newFolder');
+            }
+            break;
+        }
+      } else {
+        switch (e.key) {
+          case 'Delete':
+            if (selectedFile) setDialog('delete');
+            break;
+          case 'F2':
+            if (selectedFile) setDialog('rename');
+            break;
+          case 'F5':
+            refresh();
+            break;
+          case 'Backspace':
+            goUp();
+            break;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedFile, clipboard, dialog]);
+
+  // Load directory
   const loadDirectory = useCallback(async (path: string) => {
     setIsLoading(true);
     setError(null);
     try {
       const entries = await invoke<FileEntry[]>('read_directory', { path });
       setFiles(entries);
-      setSelectedPath(null);
+      setSelectedFile(null);
     } catch (err) {
       setError(String(err));
       setFiles([]);
@@ -67,11 +136,12 @@ function App() {
     }
   }, []);
 
-  // Navigate to a path (with history)
+  // Navigate to path
   const navigateTo = useCallback((path: string, replaceHistory = false) => {
     setCurrentPath(path);
     setSearchQuery('');
     setIsSearching(false);
+    setContextMenu(null);
 
     if (replaceHistory) {
       setHistory([path]);
@@ -88,7 +158,7 @@ function App() {
     loadDirectory(path);
   }, [historyIndex, loadDirectory]);
 
-  // Navigation controls
+  // Navigation
   const canGoBack = historyIndex > 0;
   const canGoForward = historyIndex < history.length - 1;
 
@@ -115,7 +185,7 @@ function App() {
   const goUp = useCallback(async () => {
     try {
       const parent = await invoke<string | null>('get_parent_directory', { path: currentPath });
-      if (parent) {
+      if (parent && parent !== currentPath) {
         navigateTo(parent);
       }
     } catch (err) {
@@ -160,26 +230,109 @@ function App() {
     }
   }, [currentPath, loadDirectory]);
 
-  // File actions
+  // File selection
   const handleSelect = useCallback((file: FileEntry) => {
-    setSelectedPath(file.path);
+    setSelectedFile(file);
   }, []);
 
   const handleOpen = useCallback(async (file: FileEntry) => {
     if (file.is_dir) {
       navigateTo(file.path);
     } else {
-      // Open file with default application
       try {
         await open(file.path);
       } catch (err) {
         console.error('Failed to open file:', err);
+        setError(`Failed to open: ${err}`);
       }
     }
   }, [navigateTo]);
 
+  // Context menu
+  const handleContextMenu = useCallback((e: React.MouseEvent, file: FileEntry) => {
+    e.preventDefault();
+    setSelectedFile(file);
+    setContextMenu({ x: e.clientX, y: e.clientY, file });
+  }, []);
+
+  const handleBackgroundContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, file: null });
+  }, []);
+
+  // File operations
+  const handleCopy = useCallback(() => {
+    if (selectedFile) {
+      setClipboard({ items: [selectedFile], operation: 'copy' });
+    }
+  }, [selectedFile]);
+
+  const handleCut = useCallback(() => {
+    if (selectedFile) {
+      setClipboard({ items: [selectedFile], operation: 'cut' });
+    }
+  }, [selectedFile]);
+
+  const handlePaste = useCallback(async () => {
+    if (!clipboard) return;
+
+    try {
+      for (const item of clipboard.items) {
+        if (clipboard.operation === 'copy') {
+          await invoke('copy_item', { source: item.path, destination: currentPath });
+        } else {
+          await invoke('move_item', { source: item.path, destination: currentPath });
+        }
+      }
+
+      if (clipboard.operation === 'cut') {
+        setClipboard(null);
+      }
+
+      refresh();
+    } catch (err) {
+      setError(String(err));
+    }
+  }, [clipboard, currentPath, refresh]);
+
+  const handleNewFolder = useCallback(async (name: string) => {
+    try {
+      await invoke('create_folder', { path: currentPath, name });
+      refresh();
+      setDialog(null);
+    } catch (err) {
+      setError(String(err));
+    }
+  }, [currentPath, refresh]);
+
+  const handleRename = useCallback(async (newName: string) => {
+    if (!selectedFile) return;
+
+    try {
+      await invoke('rename_item', { oldPath: selectedFile.path, newName });
+      refresh();
+      setDialog(null);
+      setSelectedFile(null);
+    } catch (err) {
+      setError(String(err));
+    }
+  }, [selectedFile, refresh]);
+
+  const handleDelete = useCallback(async () => {
+    if (!selectedFile) return;
+
+    try {
+      await invoke('delete_item', { path: selectedFile.path });
+      refresh();
+      setDialog(null);
+      setSelectedFile(null);
+    } catch (err) {
+      setError(String(err));
+    }
+  }, [selectedFile, refresh]);
+
   return (
-    <div className="h-screen flex flex-col bg-[var(--color-bg-primary)]">
+    <div className="h-screen flex flex-col bg-[var(--color-bg-mica)]">
       {/* Toolbar */}
       <Toolbar
         currentPath={currentPath}
@@ -187,6 +340,8 @@ function App() {
         canGoForward={canGoForward}
         viewMode={viewMode}
         searchQuery={searchQuery}
+        hasSelection={!!selectedFile}
+        hasClipboard={!!clipboard}
         onBack={goBack}
         onForward={goForward}
         onUp={goUp}
@@ -194,6 +349,12 @@ function App() {
         onNavigate={navigateTo}
         onViewModeChange={setViewMode}
         onSearchChange={handleSearch}
+        onNewFolder={() => setDialog('newFolder')}
+        onCut={handleCut}
+        onCopy={handleCopy}
+        onPaste={handlePaste}
+        onRename={() => setDialog('rename')}
+        onDelete={() => setDialog('delete')}
       />
 
       <div className="flex-1 flex overflow-hidden">
@@ -206,56 +367,113 @@ function App() {
         />
 
         {/* Main content */}
-        <main className="flex-1 flex flex-col overflow-hidden bg-[var(--color-bg-primary)]">
+        <main
+          className="flex-1 flex flex-col overflow-hidden"
+          onContextMenu={handleBackgroundContextMenu}
+        >
           {/* Search indicator */}
           {isSearching && (
-            <div className="px-4 py-2 bg-[var(--color-bg-tertiary)] border-b border-[var(--color-border)] text-sm text-[var(--color-text-secondary)]">
-              Searching for "{searchQuery}" in {currentPath}
+            <div className="px-4 py-2 bg-[var(--color-bg-card)] border-b border-[var(--color-divider)] text-[13px] text-[var(--color-text-secondary)]">
+              Search results for "{searchQuery}" in {currentPath}
             </div>
           )}
 
-          {/* Error message */}
+          {/* Error */}
           {error && (
-            <div className="px-4 py-3 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm">
-              {error}
+            <div className="px-4 py-3 bg-red-500/10 border-b border-red-500/20 text-red-400 text-[13px] flex items-center justify-between">
+              <span>{error}</span>
+              <button onClick={() => setError(null)} className="hover:text-red-300">✕</button>
             </div>
           )}
 
-          {/* Loading indicator */}
+          {/* Loading */}
           {isLoading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-[var(--color-bg-primary)]/50 z-10">
+            <div className="absolute inset-0 flex items-center justify-center bg-[var(--color-bg-mica)]/80 z-10">
               <div className="text-[var(--color-text-secondary)]">Loading...</div>
             </div>
           )}
 
-          {/* File display */}
+          {/* File view */}
           {viewMode === 'grid' ? (
             <FileGrid
               files={files}
-              selectedPath={selectedPath}
+              selectedPath={selectedFile?.path || null}
               onSelect={handleSelect}
               onOpen={handleOpen}
+              onContextMenu={handleContextMenu}
             />
           ) : (
             <FileList
               files={files}
-              selectedPath={selectedPath}
+              selectedPath={selectedFile?.path || null}
               onSelect={handleSelect}
               onOpen={handleOpen}
+              onContextMenu={handleContextMenu}
             />
           )}
 
           {/* Status bar */}
-          <footer className="h-7 flex items-center px-4 bg-[var(--color-bg-secondary)] border-t border-[var(--color-border)] text-xs text-[var(--color-text-secondary)]">
+          <footer className="h-6 flex items-center px-4 bg-[var(--color-bg-card)] border-t border-[var(--color-border)] text-[11px] text-[var(--color-text-secondary)]">
             <span>{files.length} items</span>
-            {selectedPath && (
+            {selectedFile && (
               <span className="ml-4 truncate">
-                Selected: {selectedPath}
+                {selectedFile.name}
               </span>
             )}
           </footer>
         </main>
       </div>
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          hasSelection={!!selectedFile}
+          hasClipboard={!!clipboard}
+          isOnFile={!!contextMenu.file}
+          onClose={() => setContextMenu(null)}
+          onNewFolder={() => { setContextMenu(null); setDialog('newFolder'); }}
+          onCut={() => { handleCut(); setContextMenu(null); }}
+          onCopy={() => { handleCopy(); setContextMenu(null); }}
+          onPaste={() => { handlePaste(); setContextMenu(null); }}
+          onRename={() => { setContextMenu(null); setDialog('rename'); }}
+          onDelete={() => { setContextMenu(null); setDialog('delete'); }}
+          onOpen={() => { if (selectedFile) handleOpen(selectedFile); setContextMenu(null); }}
+        />
+      )}
+
+      {/* Dialogs */}
+      {dialog === 'newFolder' && (
+        <InputDialog
+          title="New folder"
+          placeholder="Folder name"
+          confirmLabel="Create"
+          onConfirm={handleNewFolder}
+          onCancel={() => setDialog(null)}
+        />
+      )}
+
+      {dialog === 'rename' && selectedFile && (
+        <InputDialog
+          title="Rename"
+          initialValue={selectedFile.name}
+          confirmLabel="Rename"
+          onConfirm={handleRename}
+          onCancel={() => setDialog(null)}
+        />
+      )}
+
+      {dialog === 'delete' && selectedFile && (
+        <ConfirmDialog
+          title="Delete"
+          message={`Are you sure you want to delete "${selectedFile.name}"? This action cannot be undone.`}
+          confirmLabel="Delete"
+          confirmDanger
+          onConfirm={handleDelete}
+          onCancel={() => setDialog(null)}
+        />
+      )}
     </div>
   );
 }

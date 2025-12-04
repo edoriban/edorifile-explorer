@@ -215,6 +215,140 @@ fn get_quick_access() -> Vec<FileEntry> {
     folders
 }
 
+/// Create a new folder
+#[tauri::command]
+fn create_folder(path: String, name: String) -> Result<String, String> {
+    let folder_path = Path::new(&path).join(&name);
+
+    if folder_path.exists() {
+        return Err(format!("A folder named '{}' already exists", name));
+    }
+
+    fs::create_dir(&folder_path).map_err(|e| e.to_string())?;
+
+    Ok(folder_path.to_string_lossy().to_string())
+}
+
+/// Rename a file or folder
+#[tauri::command]
+fn rename_item(old_path: String, new_name: String) -> Result<String, String> {
+    let old = Path::new(&old_path);
+
+    if !old.exists() {
+        return Err(format!("Item does not exist: {}", old_path));
+    }
+
+    let parent = old.parent().ok_or("Cannot get parent directory")?;
+    let new_path = parent.join(&new_name);
+
+    if new_path.exists() {
+        return Err(format!("An item named '{}' already exists", new_name));
+    }
+
+    fs::rename(&old_path, &new_path).map_err(|e| e.to_string())?;
+
+    Ok(new_path.to_string_lossy().to_string())
+}
+
+/// Delete a file or folder
+#[tauri::command]
+fn delete_item(path: String) -> Result<(), String> {
+    let item_path = Path::new(&path);
+
+    if !item_path.exists() {
+        return Err(format!("Item does not exist: {}", path));
+    }
+
+    if item_path.is_dir() {
+        fs::remove_dir_all(&path).map_err(|e| e.to_string())?;
+    } else {
+        fs::remove_file(&path).map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
+}
+
+/// Copy a file or folder to destination
+#[tauri::command]
+fn copy_item(source: String, destination: String) -> Result<String, String> {
+    let src = Path::new(&source);
+    let src_name = src.file_name().ok_or("Cannot get file name")?;
+    let dest_path = Path::new(&destination).join(src_name);
+
+    if !src.exists() {
+        return Err(format!("Source does not exist: {}", source));
+    }
+
+    if dest_path.exists() {
+        return Err(format!(
+            "Destination already exists: {}",
+            dest_path.display()
+        ));
+    }
+
+    if src.is_dir() {
+        copy_dir_recursive(src, &dest_path)?;
+    } else {
+        fs::copy(&source, &dest_path).map_err(|e| e.to_string())?;
+    }
+
+    Ok(dest_path.to_string_lossy().to_string())
+}
+
+/// Helper function to copy directories recursively
+fn copy_dir_recursive(src: &Path, dest: &Path) -> Result<(), String> {
+    fs::create_dir_all(dest).map_err(|e| e.to_string())?;
+
+    for entry in fs::read_dir(src).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let src_path = entry.path();
+        let dest_path = dest.join(entry.file_name());
+
+        if src_path.is_dir() {
+            copy_dir_recursive(&src_path, &dest_path)?;
+        } else {
+            fs::copy(&src_path, &dest_path).map_err(|e| e.to_string())?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Move a file or folder to destination
+#[tauri::command]
+fn move_item(source: String, destination: String) -> Result<String, String> {
+    let src = Path::new(&source);
+    let src_name = src.file_name().ok_or("Cannot get file name")?;
+    let dest_path = Path::new(&destination).join(src_name);
+
+    if !src.exists() {
+        return Err(format!("Source does not exist: {}", source));
+    }
+
+    if dest_path.exists() {
+        return Err(format!(
+            "Destination already exists: {}",
+            dest_path.display()
+        ));
+    }
+
+    // Try simple rename first (works if same filesystem)
+    if fs::rename(&source, &dest_path).is_ok() {
+        return Ok(dest_path.to_string_lossy().to_string());
+    }
+
+    // If rename fails (cross-filesystem), copy then delete
+    if src.is_dir() {
+        copy_dir_recursive(src, &dest_path)?;
+        fs::remove_dir_all(&source).map_err(|e| e.to_string())?;
+    } else {
+        fs::copy(&source, &dest_path).map_err(|e| e.to_string())?;
+        fs::remove_file(&source).map_err(|e| e.to_string())?;
+    }
+
+    Ok(dest_path.to_string_lossy().to_string())
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -224,7 +358,12 @@ fn main() {
             get_drives,
             search_files,
             get_parent_directory,
-            get_quick_access
+            get_quick_access,
+            create_folder,
+            rename_item,
+            delete_item,
+            copy_item,
+            move_item
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
