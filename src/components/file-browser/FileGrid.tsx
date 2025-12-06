@@ -1,6 +1,6 @@
 import { FC } from 'react';
-import { FileEntry } from '../../types';
-import { getFileIcon } from '../../utils/icons';
+import type { FileEntry } from '@types';
+import { getFileIcon } from '@utils/icons';
 
 interface FileGridProps {
     files: FileEntry[];

@@ -1,6 +1,6 @@
 import { FC } from 'react';
-import { FileEntry, DriveInfo } from '../../types';
-import { DriveIcon, getQuickAccessIcon } from '../../utils/icons';
+import type { FileEntry, DriveInfo } from '@types';
+import { DriveIcon, getQuickAccessIcon } from '@utils/icons';
 
 interface SidebarProps {
     drives: DriveInfo[];

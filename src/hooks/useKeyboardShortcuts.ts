@@ -3,7 +3,7 @@
 
 import { useEffect } from 'react';
 import { useFileOperations, type DialogType } from './useFileOperations';
-import { useTabStore, useClipboardStore } from '../store';
+import { useTabStore, useClipboardStore } from '@store';
 
 interface KeyboardShortcutsOptions {
     dialog: DialogType;

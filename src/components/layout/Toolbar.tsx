@@ -1,5 +1,5 @@
 import { FC, useState, useEffect, useRef } from 'react';
-import { ViewMode } from '../../types';
+import type { ViewMode } from '@types';
 import {
     ChevronLeftIcon,
     ChevronRightIcon,
@@ -14,7 +14,7 @@ import {
     RenameIcon,
     DeleteIcon,
     NewFolderIcon
-} from '../../utils/icons';
+} from '@utils/icons';
 
 interface ToolbarProps {
     currentPath: string;

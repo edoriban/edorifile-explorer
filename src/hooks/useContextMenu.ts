@@ -3,10 +3,10 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import { systemService } from '../services';
-import { useTabStore, useClipboardStore } from '../store';
+import { systemService } from '@services';
+import { useTabStore, useClipboardStore } from '@store';
 import { useFileOperations, type DialogType } from './useFileOperations';
-import type { FileEntry } from '../types';
+import type { FileEntry } from '@types';
 
 interface ContextMenuOptions {
     setDialog: (dialog: DialogType) => void;

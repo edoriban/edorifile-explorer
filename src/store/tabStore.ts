@@ -2,8 +2,8 @@
 // Manages multi-tab functionality with per-tab state
 
 import { create } from 'zustand';
-import type { Tab, TabState, FileEntry } from '../types';
-import { fileService } from '../services';
+import type { Tab, TabState, FileEntry } from '@types';
+import { fileService } from '@services';
 
 // Generate unique tab ID
 const generateId = () => Math.random().toString(36).substring(2, 9);

@@ -5,10 +5,10 @@ import { useState, useEffect } from 'react';
 import './App.css';
 
 // Stores
-import { useAppStore, useTabStore, useClipboardStore } from './store';
+import { useAppStore, useTabStore, useClipboardStore } from '@store';
 
 // Hooks
-import { useFileOperations, useKeyboardShortcuts, useContextMenu, type DialogType } from './hooks';
+import { useFileOperations, useKeyboardShortcuts, useContextMenu, type DialogType } from '@hooks';
 
 // Components - organized by category
 import {
@@ -20,7 +20,7 @@ import {
   InputDialog,
   ConfirmDialog,
   PropertiesDialog
-} from './components';
+} from '@components';
 
 function App() {
   // Dialog state (local since it's UI-only)

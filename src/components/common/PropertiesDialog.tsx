@@ -2,10 +2,10 @@
 // Refactored to use fileService (Dependency Inversion Principle)
 
 import { FC, useEffect, useState } from 'react';
-import { fileService, type FileProperties } from '../../services';
-import type { FileEntry } from '../../types';
-import { getFileIcon } from '../../utils/icons';
-import { formatSize, getFileType } from '../../utils/format';
+import { fileService, type FileProperties } from '@services';
+import type { FileEntry } from '@types';
+import { getFileIcon } from '@utils/icons';
+import { formatSize, getFileType } from '@utils/format';
 
 interface PropertiesDialogProps {
     file: FileEntry;

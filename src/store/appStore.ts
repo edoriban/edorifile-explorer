@@ -2,8 +2,8 @@
 // Manages drives, quick access, and view mode
 
 import { create } from 'zustand';
-import type { DriveInfo, FileEntry, ViewMode } from '../types';
-import { systemService } from '../services';
+import type { DriveInfo, FileEntry, ViewMode } from '@types';
+import { systemService } from '@services';
 
 interface AppState {
     // Data

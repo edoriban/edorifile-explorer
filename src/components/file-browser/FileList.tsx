@@ -1,7 +1,7 @@
 import { FC } from 'react';
-import { FileEntry } from '../../types';
-import { getFileIcon } from '../../utils/icons';
-import { formatSize, getFileType } from '../../utils/format';
+import type { FileEntry } from '@types';
+import { getFileIcon } from '@utils/icons';
+import { formatSize, getFileType } from '@utils/format';
 
 interface FileListProps {
     files: FileEntry[];

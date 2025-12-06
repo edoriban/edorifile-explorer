@@ -2,9 +2,9 @@
 // Encapsulates copy, cut, paste, create folder, rename, delete operations
 
 import { useCallback } from 'react';
-import { fileService, systemService } from '../services';
-import { useTabStore, useClipboardStore } from '../store';
-import type { FileEntry } from '../types';
+import { fileService, systemService } from '@services';
+import { useTabStore, useClipboardStore } from '@store';
+import type { FileEntry } from '@types';
 
 export type DialogType = 'newFolder' | 'rename' | 'delete' | 'properties' | null;
 
