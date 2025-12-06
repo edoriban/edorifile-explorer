@@ -2,3 +2,4 @@
 export { FileGrid } from './FileGrid';
 export { FileList } from './FileList';
 export { FileItem } from './FileItem';
+export { Thumbnail } from './Thumbnail';

@@ -1,9 +1,12 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use base64::{engine::general_purpose, Engine as _};
 use chrono::{DateTime, Local};
+use image::ImageFormat;
 use serde::Serialize;
 use std::fs;
+use std::io::Cursor;
 use std::path::Path;
 use walkdir::WalkDir;
 
@@ -669,6 +672,57 @@ async fn show_context_menu(
     Ok(())
 }
 
+/// Supported extensions for thumbnail generation
+const THUMBNAIL_EXTENSIONS: &[&str] = &[
+    "jpg", "jpeg", "png", "gif", "bmp", "webp", "ico", "tiff", "tif",
+];
+
+/// Check if file supports thumbnail generation
+fn is_thumbnail_supported(extension: &str) -> bool {
+    THUMBNAIL_EXTENSIONS.contains(&extension.to_lowercase().as_str())
+}
+
+/// Generate a thumbnail for an image file
+/// Returns a base64-encoded PNG thumbnail (96x96 max)
+#[tauri::command]
+async fn get_thumbnail(path: String, size: Option<u32>) -> Result<String, String> {
+    let file_path = Path::new(&path);
+
+    if !file_path.exists() {
+        return Err("File does not exist".to_string());
+    }
+
+    // Get extension
+    let extension = file_path
+        .extension()
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+
+    // Check if supported
+    if !is_thumbnail_supported(&extension) {
+        return Err("Unsupported file type".to_string());
+    }
+
+    let thumb_size = size.unwrap_or(96);
+
+    // Load and resize image
+    let img = image::open(&path).map_err(|e| e.to_string())?;
+
+    // Use thumbnail method for fast resizing (maintains aspect ratio)
+    let thumbnail = img.thumbnail(thumb_size, thumb_size);
+
+    // Encode to PNG in memory
+    let mut buffer = Cursor::new(Vec::new());
+    thumbnail
+        .write_to(&mut buffer, ImageFormat::Png)
+        .map_err(|e| e.to_string())?;
+
+    // Convert to base64
+    let base64_data = general_purpose::STANDARD.encode(buffer.get_ref());
+
+    Ok(format!("data:image/png;base64,{}", base64_data))
+}
+
 fn main() {
     use tauri::Emitter;
 
@@ -700,7 +754,8 @@ fn main() {
             close_window,
             is_maximized,
             show_native_properties,
-            show_context_menu
+            show_context_menu,
+            get_thumbnail
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

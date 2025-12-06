@@ -1,6 +1,9 @@
+// FileGrid component - displays files in a grid layout with thumbnails
+// Using Thumbnail component for image previews
+
 import { FC } from 'react';
 import type { FileEntry } from '@types';
-import { getFileIcon } from '@utils/icons';
+import { Thumbnail } from './Thumbnail';
 
 interface FileGridProps {
     files: FileEntry[];
@@ -41,8 +44,14 @@ export const FileGrid: FC<FileGridProps> = ({ files, selectedPath, onSelect, onO
                                     : 'hover:bg-[var(--color-bg-hover)]'
                                 }`}
                         >
-                            <div className="w-14 h-14 flex items-center justify-center mb-2 icon-glow">
-                                {getFileIcon(file.extension, file.is_dir, 56)}
+                            {/* Thumbnail or Icon */}
+                            <div className="w-14 h-14 flex items-center justify-center mb-2">
+                                <Thumbnail
+                                    path={file.path}
+                                    extension={file.extension}
+                                    isDir={file.is_dir}
+                                    size={56}
+                                />
                             </div>
                             <span
                                 className={`text-[12px] text-center w-full px-1 leading-snug ${isSelected ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-secondary)]'
