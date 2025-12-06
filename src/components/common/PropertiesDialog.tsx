@@ -1,20 +1,15 @@
+// PropertiesDialog component - displays file/folder properties
+// Refactored to use fileService (Dependency Inversion Principle)
+
 import { FC, useEffect, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { FileEntry } from '../types';
-import { getFileIcon } from '../utils/icons';
-import { formatSize, getFileType } from '../utils/format';
+import { fileService, type FileProperties } from '../../services';
+import type { FileEntry } from '../../types';
+import { getFileIcon } from '../../utils/icons';
+import { formatSize, getFileType } from '../../utils/format';
 
 interface PropertiesDialogProps {
     file: FileEntry;
     onClose: () => void;
-}
-
-interface FileProperties {
-    created: String;
-    accessed: String;
-    modified: String;
-    readonly: boolean;
-    hidden: boolean;
 }
 
 export const PropertiesDialog: FC<PropertiesDialogProps> = ({ file, onClose }) => {
@@ -24,7 +19,7 @@ export const PropertiesDialog: FC<PropertiesDialogProps> = ({ file, onClose }) =
     useEffect(() => {
         const fetchProperties = async () => {
             try {
-                const props = await invoke<FileProperties>('get_file_properties', { path: file.path });
+                const props = await fileService.getFileProperties(file.path);
                 setProperties(props);
             } catch (err) {
                 console.error('Failed to get properties:', err);

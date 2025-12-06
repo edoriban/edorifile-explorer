@@ -1,4 +1,4 @@
-import { FC } from 'react';
+import React, { FC } from 'react';
 
 interface IconProps {
     className?: string;
@@ -270,8 +270,8 @@ export const getFileIcon = (extension: string, isDir: boolean, size: number = 24
 };
 
 // Get quick access icon
-export const getQuickAccessIcon = (name: string, size: number = 18) => {
-    const icons: Record<string, JSX.Element> = {
+export const getQuickAccessIcon = (name: string, size: number = 18): React.ReactNode => {
+    const icons: Record<string, React.ReactNode> = {
         'Desktop': <DesktopIcon size={size} />,
         'Downloads': <DownloadIcon size={size} />,
         'Documents': <DocumentsIcon size={size} />,

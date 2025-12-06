@@ -1,12 +1,7 @@
 import { FC } from 'react';
-import { PlusIcon } from '../utils/icons';
-import { WindowControls } from './WindowControls';
-
-export interface Tab {
-    id: string;
-    path: string;
-    title: string;
-}
+import { PlusIcon } from '../../utils/icons';
+import { WindowControls } from '../common/WindowControls';
+import type { Tab } from '../../types';
 
 interface TabBarProps {
     tabs: Tab[];

@@ -1,7 +1,7 @@
 import { FC } from 'react';
-import { FileEntry } from '../types';
-import { getFileIcon } from '../utils/icons';
-import { formatSize, getFileType } from '../utils/format';
+import { FileEntry } from '../../types';
+import { getFileIcon } from '../../utils/icons';
+import { formatSize, getFileType } from '../../utils/format';
 
 interface FileListProps {
     files: FileEntry[];
@@ -28,8 +28,8 @@ export const FileList: FC<FileListProps> = ({ files, selectedPath, onSelect, onO
     return (
         <div className="flex-1 overflow-y-auto">
             {/* Header */}
-            <div className="sticky top-0 z-10 grid grid-cols-[1fr_150px_150px_100px] gap-4 px-4 py-2 bg-[var(--color-bg-surface)] border-b border-[var(--color-border)] text-[11px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider">
-                <div className="pl-1">Name</div>
+            <div className="sticky top-0 z-10 grid grid-cols-[1fr_150px_150px_100px] gap-4 px-6 py-2 bg-[var(--color-bg-surface)] border-b border-[var(--color-border)] text-[11px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider">
+                <div className="pl-8">Name</div>
                 <div>Modified</div>
                 <div>Type</div>
                 <div className="text-right pr-2">Size</div>
@@ -45,7 +45,7 @@ export const FileList: FC<FileListProps> = ({ files, selectedPath, onSelect, onO
                             onClick={() => onSelect(file)}
                             onDoubleClick={() => onOpen(file)}
                             onContextMenu={(e) => onContextMenu(e, file)}
-                            className={`file-row w-full grid grid-cols-[1fr_150px_150px_100px] gap-4 px-4 py-2 items-center text-left transition-colors
+                            className={`file-row w-full grid grid-cols-[1fr_150px_150px_100px] gap-4 px-6 py-2 items-center text-left transition-colors
                 ${isSelected ? 'selected' : 'hover:bg-[var(--color-bg-hover)]'}`}
                         >
                             {/* Name with icon */}

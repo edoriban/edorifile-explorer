@@ -1,5 +1,5 @@
 import { FC, useState, useEffect, useRef } from 'react';
-import { ViewMode } from '../types';
+import { ViewMode } from '../../types';
 import {
     ChevronLeftIcon,
     ChevronRightIcon,
@@ -14,7 +14,7 @@ import {
     RenameIcon,
     DeleteIcon,
     NewFolderIcon
-} from '../utils/icons';
+} from '../../utils/icons';
 
 interface ToolbarProps {
     currentPath: string;
@@ -212,13 +212,13 @@ export const Toolbar: FC<ToolbarProps> = ({
                         value={searchQuery}
                         onChange={(e) => onSearchChange(e.target.value)}
                         placeholder="Search"
-                        className="address-bar w-full pl-9 pr-3 text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]"
+                        className="address-bar w-full pl-10 pr-3 text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]"
                     />
                 </div>
             </header>
 
             {/* Command Bar (New, Cut, Copy, etc.) */}
-            <div className="h-10 flex items-center gap-1 px-3 bg-[var(--color-bg-surface)] border-b border-[var(--color-border)]">
+            <div className="h-10 flex items-center gap-2 px-4 bg-[var(--color-bg-surface)] border-b border-[var(--color-border)]">
                 <ActionButton
                     icon={<NewFolderIcon size={16} />}
                     label="New"
@@ -240,8 +240,8 @@ export const Toolbar: FC<ToolbarProps> = ({
                     <button
                         onClick={() => onViewModeChange('list')}
                         className={`w-8 h-8 flex items-center justify-center rounded-[var(--radius-md)] transition-colors ${viewMode === 'list'
-                                ? 'bg-[var(--color-bg-hover)] text-[var(--color-accent)]'
-                                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
+                            ? 'bg-[var(--color-bg-hover)] text-[var(--color-accent)]'
+                            : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
                             }`}
                         title="List view"
                     >
@@ -250,8 +250,8 @@ export const Toolbar: FC<ToolbarProps> = ({
                     <button
                         onClick={() => onViewModeChange('grid')}
                         className={`w-8 h-8 flex items-center justify-center rounded-[var(--radius-md)] transition-colors ${viewMode === 'grid'
-                                ? 'bg-[var(--color-bg-hover)] text-[var(--color-accent)]'
-                                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
+                            ? 'bg-[var(--color-bg-hover)] text-[var(--color-accent)]'
+                            : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
                             }`}
                         title="Grid view"
                     >

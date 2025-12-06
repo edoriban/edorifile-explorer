@@ -1,4 +1,5 @@
-// TypeScript types matching Rust structs
+// Types for file entries and system information
+// Matches the Rust structs in src-tauri
 
 export interface FileEntry {
     name: string;
@@ -17,7 +18,5 @@ export interface DriveInfo {
 }
 
 export type ViewMode = 'grid' | 'list';
-
 export type SortBy = 'name' | 'date' | 'size' | 'type';
-
 export type SortOrder = 'asc' | 'desc';
