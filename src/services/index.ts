@@ -1,4 +1,4 @@
 // Services barrel export
-export { fileService, type FileService, type FileProperties } from './fileService';
+export { fileService, type FileService, type FileProperties, type CloudDrive } from './fileService';
 export { systemService, type SystemService, type ContextMenuParams } from './systemService';
 export { thumbnailService, type ThumbnailService } from './thumbnailService';

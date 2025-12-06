@@ -8,6 +8,7 @@ export interface FileEntry {
     size: number;
     modified: string;
     extension: string;
+    is_cloud_placeholder: boolean; // Cloud file not yet downloaded
 }
 
 export interface DriveInfo {

@@ -19,6 +19,7 @@ pub struct FileEntry {
     pub size: u64,
     pub modified: String,
     pub extension: String,
+    pub is_cloud_placeholder: bool, // Cloud file not yet downloaded
 }
 
 /// Represents a drive on the system
@@ -28,6 +29,20 @@ pub struct DriveInfo {
     pub path: String,
     pub total_space: u64,
     pub free_space: u64,
+}
+
+/// Check if a file is a cloud placeholder (not fully downloaded)
+/// Uses FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS (0x00400000)
+#[cfg(target_os = "windows")]
+fn is_cloud_placeholder(metadata: &std::fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    const FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS: u32 = 0x00400000;
+    (metadata.file_attributes() & FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS) != 0
+}
+
+#[cfg(not(target_os = "windows"))]
+fn is_cloud_placeholder(_metadata: &std::fs::Metadata) -> bool {
+    false
 }
 
 /// Read the contents of a directory
@@ -71,6 +86,7 @@ fn read_directory(path: String) -> Result<Vec<FileEntry>, String> {
                     size: metadata.len(),
                     modified,
                     extension,
+                    is_cloud_placeholder: is_cloud_placeholder(&metadata),
                 });
             }
         }
@@ -160,6 +176,7 @@ fn search_files(
                     size: metadata.len(),
                     modified,
                     extension,
+                    is_cloud_placeholder: is_cloud_placeholder(&metadata),
                 });
             }
         }
@@ -210,12 +227,146 @@ fn get_quick_access() -> Vec<FileEntry> {
                     size: 0,
                     modified: String::new(),
                     extension: String::new(),
+                    is_cloud_placeholder: false, // Local folders are never cloud placeholders
                 });
             }
         }
     }
 
     folders
+}
+
+/// Represents a cloud drive
+#[derive(Serialize)]
+pub struct CloudDrive {
+    pub name: String,
+    pub path: String,
+    pub provider: String, // "onedrive", "icloud", "google_drive"
+}
+
+/// Get cloud drives (OneDrive, iCloud, etc.)
+#[tauri::command]
+fn get_cloud_drives() -> Vec<CloudDrive> {
+    let mut drives = Vec::new();
+
+    // Check for OneDrive
+    if let Some(home) = std::env::var_os("USERPROFILE") {
+        let home_path = Path::new(&home);
+
+        // Check common OneDrive locations
+        let onedrive_paths = [
+            ("OneDrive", "OneDrive"),
+            ("OneDrive - Personal", "OneDrive"),
+        ];
+
+        for (folder, provider) in onedrive_paths {
+            let path = home_path.join(folder);
+            if path.exists() && path.is_dir() {
+                drives.push(CloudDrive {
+                    name: folder.to_string(),
+                    path: path.to_string_lossy().to_string(),
+                    provider: provider.to_string(),
+                });
+            }
+        }
+
+        // Check for OneDrive Business (pattern: "OneDrive - CompanyName")
+        if let Ok(entries) = fs::read_dir(&home_path) {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.starts_with("OneDrive - ") && !name.contains("Personal") {
+                    if let Ok(meta) = entry.metadata() {
+                        if meta.is_dir() {
+                            drives.push(CloudDrive {
+                                name: name.clone(),
+                                path: entry.path().to_string_lossy().to_string(),
+                                provider: "OneDrive".to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        // Check for iCloud Drive
+        let icloud_path = home_path.join("iCloudDrive");
+        if icloud_path.exists() && icloud_path.is_dir() {
+            drives.push(CloudDrive {
+                name: "iCloud Drive".to_string(),
+                path: icloud_path.to_string_lossy().to_string(),
+                provider: "iCloud".to_string(),
+            });
+        }
+
+        // Alternative iCloud path
+        if let Some(appdata) = std::env::var_os("LOCALAPPDATA") {
+            let icloud_alt = Path::new(&appdata).join("Apple").join("iCloudDrive");
+            if icloud_alt.exists() && icloud_alt.is_dir() {
+                drives.push(CloudDrive {
+                    name: "iCloud Drive".to_string(),
+                    path: icloud_alt.to_string_lossy().to_string(),
+                    provider: "iCloud".to_string(),
+                });
+            }
+        }
+
+        // Check for iCloud Photos
+        if let Some(appdata) = std::env::var_os("LOCALAPPDATA") {
+            let icloud_photos = Path::new(&appdata).join("Apple").join("iCloudPhotos");
+            if icloud_photos.exists() && icloud_photos.is_dir() {
+                drives.push(CloudDrive {
+                    name: "iCloud Photos".to_string(),
+                    path: icloud_photos.to_string_lossy().to_string(),
+                    provider: "iCloud".to_string(),
+                });
+            }
+        }
+    }
+
+    drives
+}
+
+/// Get immediate child folders for tree navigation (lazy loading)
+#[tauri::command]
+fn get_folder_children(path: String) -> Result<Vec<FileEntry>, String> {
+    let dir_path = Path::new(&path);
+
+    if !dir_path.exists() {
+        return Err(format!("Path does not exist: {}", path));
+    }
+
+    if !dir_path.is_dir() {
+        return Err(format!("Path is not a directory: {}", path));
+    }
+
+    let mut folders = Vec::new();
+
+    let read_result = fs::read_dir(dir_path).map_err(|e| e.to_string())?;
+
+    for entry in read_result.flatten() {
+        if let Ok(metadata) = entry.metadata() {
+            if metadata.is_dir() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                // Skip hidden and system folders
+                if !name.starts_with('.') && !name.starts_with('$') {
+                    folders.push(FileEntry {
+                        name,
+                        path: entry.path().to_string_lossy().to_string(),
+                        is_dir: true,
+                        size: 0,
+                        modified: String::new(),
+                        extension: String::new(),
+                        is_cloud_placeholder: is_cloud_placeholder(&metadata),
+                    });
+                }
+            }
+        }
+    }
+
+    // Sort by name (case-insensitive)
+    folders.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+
+    Ok(folders)
 }
 
 /// Create a new folder
@@ -742,6 +893,8 @@ fn main() {
             search_files,
             get_parent_directory,
             get_quick_access,
+            get_cloud_drives,
+            get_folder_children,
             create_folder,
             rename_item,
             delete_item,

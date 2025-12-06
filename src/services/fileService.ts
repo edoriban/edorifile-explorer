@@ -12,6 +12,12 @@ export interface FileProperties {
     hidden: boolean;
 }
 
+export interface CloudDrive {
+    name: string;
+    path: string;
+    provider: string; // "OneDrive", "iCloud", etc.
+}
+
 export interface FileService {
     readDirectory: (path: string) => Promise<FileEntry[]>;
     createFolder: (path: string, name: string) => Promise<void>;
@@ -21,6 +27,8 @@ export interface FileService {
     moveItem: (source: string, destination: string) => Promise<void>;
     searchFiles: (path: string, query: string, maxResults?: number) => Promise<FileEntry[]>;
     getFileProperties: (path: string) => Promise<FileProperties>;
+    getCloudDrives: () => Promise<CloudDrive[]>;
+    getFolderChildren: (path: string) => Promise<FileEntry[]>;
 }
 
 export const fileService: FileService = {
@@ -47,4 +55,10 @@ export const fileService: FileService = {
 
     getFileProperties: (path: string) =>
         invoke<FileProperties>('get_file_properties', { path }),
+
+    getCloudDrives: () =>
+        invoke<CloudDrive[]>('get_cloud_drives'),
+
+    getFolderChildren: (path: string) =>
+        invoke<FileEntry[]>('get_folder_children', { path }),
 };
