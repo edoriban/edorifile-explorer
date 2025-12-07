@@ -823,18 +823,147 @@ async fn show_context_menu(
     Ok(())
 }
 
-/// Supported extensions for thumbnail generation
-const THUMBNAIL_EXTENSIONS: &[&str] = &[
+/// Supported extensions for thumbnail generation - images (fast, use image crate)
+const IMAGE_EXTENSIONS: &[&str] = &[
     "jpg", "jpeg", "png", "gif", "bmp", "webp", "ico", "tiff", "tif",
 ];
 
-/// Check if file supports thumbnail generation
-fn is_thumbnail_supported(extension: &str) -> bool {
-    THUMBNAIL_EXTENSIONS.contains(&extension.to_lowercase().as_str())
+/// Extensions that Windows Shell can generate thumbnails for (videos, PDFs, etc)
+const SHELL_THUMBNAIL_EXTENSIONS: &[&str] = &[
+    "mp4", "mkv", "avi", "mov", "wmv", "flv", "webm", "m4v", "mpeg", "mpg", "pdf", "doc", "docx",
+    "xls", "xlsx", "ppt", "pptx",
+];
+
+/// Check if file supports thumbnail via image crate
+fn is_image_thumbnail_supported(extension: &str) -> bool {
+    IMAGE_EXTENSIONS.contains(&extension.to_lowercase().as_str())
 }
 
-/// Generate a thumbnail for an image file
-/// Returns a base64-encoded PNG thumbnail (96x96 max)
+/// Check if file supports thumbnail via Windows Shell
+fn is_shell_thumbnail_supported(extension: &str) -> bool {
+    SHELL_THUMBNAIL_EXTENSIONS.contains(&extension.to_lowercase().as_str())
+}
+
+/// Check if file supports any thumbnail generation
+#[allow(dead_code)]
+fn is_thumbnail_supported(extension: &str) -> bool {
+    is_image_thumbnail_supported(extension) || is_shell_thumbnail_supported(extension)
+}
+
+/// Generate a thumbnail using Windows Shell API (IShellItemImageFactory)
+/// This uses the same thumbnail system as Windows Explorer
+fn generate_shell_thumbnail(path: &str, size: u32) -> Result<String, String> {
+    use windows::core::PCWSTR;
+    use windows::Win32::Graphics::Gdi::{
+        CreateCompatibleDC, DeleteDC, DeleteObject, GetDIBits, SelectObject, BITMAPINFO,
+        BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS,
+    };
+    use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED};
+    use windows::Win32::UI::Shell::{
+        IShellItemImageFactory, SHCreateItemFromParsingName, SIIGBF_THUMBNAILONLY,
+    };
+
+    unsafe {
+        // Initialize COM
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+
+        // Convert path to wide string
+        let wide_path: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
+
+        // Create shell item
+        let shell_item: IShellItemImageFactory =
+            SHCreateItemFromParsingName(PCWSTR::from_raw(wide_path.as_ptr()), None)
+                .map_err(|e| format!("Failed to create shell item: {:?}", e))?;
+
+        // Request thumbnail
+        let thumb_size = windows::Win32::Foundation::SIZE {
+            cx: size as i32,
+            cy: size as i32,
+        };
+
+        let hbitmap = shell_item
+            .GetImage(thumb_size, SIIGBF_THUMBNAILONLY)
+            .map_err(|e| format!("Failed to get thumbnail: {:?}", e))?;
+
+        // Convert HBITMAP to PNG
+        let hdc = CreateCompatibleDC(None);
+        if hdc.is_invalid() {
+            DeleteObject(hbitmap);
+            CoUninitialize();
+            return Err("Failed to create DC".to_string());
+        }
+
+        let old_bitmap = SelectObject(hdc, hbitmap);
+
+        // Get bitmap info
+        let mut bmi = BITMAPINFO {
+            bmiHeader: BITMAPINFOHEADER {
+                biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                biWidth: size as i32,
+                biHeight: -(size as i32), // Negative for top-down
+                biPlanes: 1,
+                biBitCount: 32,
+                biCompression: BI_RGB.0,
+                biSizeImage: 0,
+                biXPelsPerMeter: 0,
+                biYPelsPerMeter: 0,
+                biClrUsed: 0,
+                biClrImportant: 0,
+            },
+            bmiColors: [Default::default()],
+        };
+
+        // Allocate buffer for pixel data
+        let mut pixels: Vec<u8> = vec![0u8; (size * size * 4) as usize];
+
+        let result = GetDIBits(
+            hdc,
+            hbitmap,
+            0,
+            size,
+            Some(pixels.as_mut_ptr() as *mut _),
+            &mut bmi,
+            DIB_RGB_COLORS,
+        );
+
+        // Cleanup GDI objects
+        SelectObject(hdc, old_bitmap);
+        DeleteDC(hdc);
+        DeleteObject(hbitmap);
+        CoUninitialize();
+
+        if result == 0 {
+            return Err("Failed to get bitmap bits".to_string());
+        }
+
+        // Convert BGRA to RGBA
+        for chunk in pixels.chunks_exact_mut(4) {
+            chunk.swap(0, 2); // Swap B and R
+        }
+
+        // Create image from raw pixels
+        let actual_width = bmi.bmiHeader.biWidth.unsigned_abs();
+        let actual_height = bmi.bmiHeader.biHeight.unsigned_abs();
+
+        let img_buffer = image::RgbaImage::from_raw(actual_width, actual_height, pixels)
+            .ok_or_else(|| "Failed to create image buffer".to_string())?;
+
+        let img = image::DynamicImage::ImageRgba8(img_buffer);
+        let thumbnail = img.thumbnail(size, size);
+
+        // Encode to PNG
+        let mut buffer = Cursor::new(Vec::new());
+        thumbnail
+            .write_to(&mut buffer, ImageFormat::Png)
+            .map_err(|e| e.to_string())?;
+
+        let base64_data = general_purpose::STANDARD.encode(buffer.get_ref());
+        Ok(format!("data:image/png;base64,{}", base64_data))
+    }
+}
+
+/// Generate a thumbnail for an image or video file
+/// Returns a base64-encoded PNG thumbnail
 #[tauri::command]
 async fn get_thumbnail(path: String, size: Option<u32>) -> Result<String, String> {
     let file_path = Path::new(&path);
@@ -849,12 +978,17 @@ async fn get_thumbnail(path: String, size: Option<u32>) -> Result<String, String
         .map(|e| e.to_string_lossy().to_lowercase())
         .unwrap_or_default();
 
-    // Check if supported
-    if !is_thumbnail_supported(&extension) {
-        return Err("Unsupported file type".to_string());
+    let thumb_size = size.unwrap_or(96);
+
+    // Use Windows Shell for videos and documents
+    if is_shell_thumbnail_supported(&extension) {
+        return generate_shell_thumbnail(&path, thumb_size);
     }
 
-    let thumb_size = size.unwrap_or(96);
+    // Use image crate for regular images (faster)
+    if !is_image_thumbnail_supported(&extension) {
+        return Err("Unsupported file type".to_string());
+    }
 
     // Load and resize image
     let img = image::open(&path).map_err(|e| e.to_string())?;

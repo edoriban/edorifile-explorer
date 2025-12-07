@@ -22,6 +22,9 @@ interface FilePreviewData {
 // Image extensions that can be previewed
 const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'ico', 'svg'];
 
+// Video extensions that can show thumbnails
+const VIDEO_EXTENSIONS = ['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', 'm4v', 'mpeg', 'mpg'];
+
 // Text extensions that can be previewed
 const TEXT_EXTENSIONS = [
     'txt', 'md', 'json', 'js', 'ts', 'jsx', 'tsx', 'css', 'html', 'xml',
@@ -74,7 +77,9 @@ export const PreviewPanel: FC<PreviewPanelProps> = ({ file, isVisible, onClose }
 
     const ext = file?.extension?.toLowerCase() || '';
     const isImage = IMAGE_EXTENSIONS.includes(ext);
+    const isVideo = VIDEO_EXTENSIONS.includes(ext);
     const isText = TEXT_EXTENSIONS.includes(ext);
+    const hasLargeThumbnail = isImage || isVideo;
 
     return (
         <div className="w-80 shrink-0 border-l border-[var(--color-border)] bg-[var(--color-bg-surface)] flex flex-col">
@@ -108,12 +113,12 @@ export const PreviewPanel: FC<PreviewPanelProps> = ({ file, isVisible, onClose }
                 <div className="flex-1 overflow-y-auto">
                     {/* File Icon/Thumbnail - centered with proper padding */}
                     <div className="pt-8 pb-6 flex justify-center">
-                        <div className={`${isImage ? 'w-44 h-44' : 'w-20 h-20'} flex items-center justify-center ${isImage ? 'rounded-xl overflow-hidden bg-[var(--color-bg-base)] border border-[var(--color-border)] shadow-sm' : ''}`}>
+                        <div className={`${hasLargeThumbnail ? 'w-44 h-44' : 'w-20 h-20'} flex items-center justify-center ${hasLargeThumbnail ? 'rounded-xl overflow-hidden bg-[var(--color-bg-base)] border border-[var(--color-border)] shadow-sm' : ''}`}>
                             <Thumbnail
                                 path={file.path}
                                 extension={file.extension}
                                 isDir={file.is_dir}
-                                size={isImage ? 160 : 80}
+                                size={hasLargeThumbnail ? 160 : 80}
                             />
                         </div>
                     </div>

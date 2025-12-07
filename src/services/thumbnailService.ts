@@ -3,10 +3,19 @@
 
 import { invoke } from '@tauri-apps/api/core';
 
-// Supported extensions for thumbnails
-const THUMBNAIL_EXTENSIONS = new Set([
+// Supported extensions for thumbnails - images (via Rust image crate)
+const IMAGE_EXTENSIONS = new Set([
     'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'ico', 'tiff', 'tif'
 ]);
+
+// Extensions that Windows Shell can generate thumbnails for (videos, PDFs, etc)
+const SHELL_THUMBNAIL_EXTENSIONS = new Set([
+    'mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', 'm4v', 'mpeg', 'mpg',
+    'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'
+]);
+
+// All supported extensions
+const THUMBNAIL_EXTENSIONS = new Set([...IMAGE_EXTENSIONS, ...SHELL_THUMBNAIL_EXTENSIONS]);
 
 export interface ThumbnailService {
     getThumbnail: (path: string, size?: number) => Promise<string>;
