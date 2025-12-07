@@ -11,6 +11,7 @@ export { TabBar } from './layout/TabBar';
 export { Sidebar } from './layout/Sidebar';
 export { Toolbar } from './layout/Toolbar';
 export { StatusBar } from './layout/StatusBar';
+export { PreviewPanel } from './layout/PreviewPanel';
 
 // File browser components
 export { FileGrid } from './file-browser/FileGrid';

@@ -17,6 +17,7 @@ import {
   Toolbar,
   FileGrid,
   FileList,
+  PreviewPanel,
   InputDialog,
   ConfirmDialog,
   PropertiesDialog
@@ -25,6 +26,9 @@ import {
 function App() {
   // Dialog state (local since it's UI-only)
   const [dialog, setDialog] = useState<DialogType>(null);
+
+  // Preview panel state
+  const [showPreview, setShowPreview] = useState(false);
 
   // App store
   const { drives, quickAccess, initialize } = useAppStore();
@@ -140,6 +144,7 @@ function App() {
         searchQuery={currentState.searchQuery}
         hasSelection={currentState.selectedPaths.length > 0}
         hasClipboard={!!clipboard}
+        showPreview={showPreview}
         onBack={goBack}
         onForward={goForward}
         onUp={goUp}
@@ -153,6 +158,7 @@ function App() {
         onPaste={handlePaste}
         onRename={() => setDialog('rename')}
         onDelete={() => setDialog('delete')}
+        onTogglePreview={() => setShowPreview(!showPreview)}
       />
 
       <div className="flex-1 flex overflow-hidden">
@@ -245,6 +251,13 @@ function App() {
             )}
           </footer>
         </main>
+
+        {/* Preview Panel */}
+        <PreviewPanel
+          file={selectedFile}
+          isVisible={showPreview}
+          onClose={() => setShowPreview(false)}
+        />
       </div>
 
       {/* Dialogs */}

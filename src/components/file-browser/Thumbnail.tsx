@@ -39,29 +39,46 @@ export const Thumbnail: FC<ThumbnailProps> = ({ path, extension, isDir, size = 5
     const shouldLoadThumbnail = !isDir && isThumbnailSupported(extension);
     const { thumbnail, isLoading } = useThumbnail(path, extension, isVisible && shouldLoadThumbnail);
 
+    // Dynamic container styles
+    const containerStyle = {
+        width: size,
+        height: size,
+    };
+
     // Show icon for directories or unsupported files
     if (isDir || !shouldLoadThumbnail) {
         return (
-            <div ref={containerRef} className="w-14 h-14 flex items-center justify-center icon-glow">
-                {getFileIcon(extension, isDir, size)}
+            <div
+                ref={containerRef}
+                className="flex items-center justify-center icon-glow"
+                style={containerStyle}
+            >
+                {getFileIcon(extension, isDir, Math.min(size, 56))}
             </div>
         );
     }
 
     return (
-        <div ref={containerRef} className="w-14 h-14 flex items-center justify-center overflow-hidden rounded-md">
+        <div
+            ref={containerRef}
+            className="flex items-center justify-center overflow-hidden rounded-md"
+            style={containerStyle}
+        >
             {thumbnail ? (
                 <img
                     src={thumbnail}
                     alt=""
-                    className="max-w-full max-h-full object-contain transition-opacity duration-200"
+                    className="w-full h-full object-contain transition-opacity duration-200"
                     loading="lazy"
                 />
             ) : isLoading ? (
-                <div className="w-10 h-10 bg-[var(--color-bg-hover)] rounded animate-pulse" />
+                <div
+                    className="bg-[var(--color-bg-hover)] rounded animate-pulse"
+                    style={{ width: size * 0.7, height: size * 0.7 }}
+                />
             ) : (
                 // Fallback to icon
-                getFileIcon(extension, isDir, size)
+                getFileIcon(extension, isDir, Math.min(size, 56))
             )}
         </div>
     );

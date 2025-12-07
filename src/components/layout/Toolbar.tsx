@@ -24,6 +24,7 @@ interface ToolbarProps {
     searchQuery: string;
     hasSelection: boolean;
     hasClipboard: boolean;
+    showPreview: boolean;
     onBack: () => void;
     onForward: () => void;
     onUp: () => void;
@@ -37,6 +38,7 @@ interface ToolbarProps {
     onPaste: () => void;
     onRename: () => void;
     onDelete: () => void;
+    onTogglePreview: () => void;
 }
 
 interface NavButtonProps {
@@ -94,6 +96,7 @@ export const Toolbar: FC<ToolbarProps> = ({
     searchQuery,
     hasSelection,
     hasClipboard,
+    showPreview,
     onBack,
     onForward,
     onUp,
@@ -107,6 +110,7 @@ export const Toolbar: FC<ToolbarProps> = ({
     onPaste,
     onRename,
     onDelete,
+    onTogglePreview,
 }) => {
     const [pathInput, setPathInput] = useState(currentPath);
     const [isEditing, setIsEditing] = useState(false);
@@ -256,6 +260,23 @@ export const Toolbar: FC<ToolbarProps> = ({
                         title="Grid view"
                     >
                         <GridIcon size={16} />
+                    </button>
+
+                    <div className="w-px h-5 bg-[var(--color-border)] mx-1" />
+
+                    {/* Preview panel toggle */}
+                    <button
+                        onClick={onTogglePreview}
+                        className={`w-8 h-8 flex items-center justify-center rounded-[var(--radius-md)] transition-colors ${showPreview
+                            ? 'bg-[var(--color-bg-hover)] text-[var(--color-accent)]'
+                            : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
+                            }`}
+                        title="Preview pane"
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2" />
+                            <line x1="15" y1="3" x2="15" y2="21" />
+                        </svg>
                     </button>
                 </div>
             </div>

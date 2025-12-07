@@ -874,6 +874,63 @@ async fn get_thumbnail(path: String, size: Option<u32>) -> Result<String, String
     Ok(format!("data:image/png;base64,{}", base64_data))
 }
 
+/// Result of reading a file preview
+#[derive(Serialize)]
+pub struct FilePreviewResult {
+    pub content: String,
+    pub line_count: usize,
+    pub is_truncated: bool,
+}
+
+/// Read the first N lines of a text file for preview
+#[tauri::command]
+fn read_file_preview(path: String, max_lines: Option<usize>) -> Result<FilePreviewResult, String> {
+    use std::io::{BufRead, BufReader};
+
+    let file_path = Path::new(&path);
+
+    if !file_path.exists() {
+        return Err("File does not exist".to_string());
+    }
+
+    if file_path.is_dir() {
+        return Err("Cannot preview directories".to_string());
+    }
+
+    let file = fs::File::open(&path).map_err(|e| e.to_string())?;
+    let reader = BufReader::new(file);
+    let max = max_lines.unwrap_or(100);
+
+    let mut lines = Vec::new();
+    let mut total_lines = 0;
+    let mut is_truncated = false;
+
+    for line in reader.lines() {
+        total_lines += 1;
+        if lines.len() < max {
+            match line {
+                Ok(l) => lines.push(l),
+                Err(_) => {
+                    // Binary file or encoding error
+                    return Err("Cannot preview binary files".to_string());
+                }
+            }
+        } else {
+            is_truncated = true;
+            // Count remaining lines for total
+            if let Ok(_) = line {
+                continue;
+            }
+        }
+    }
+
+    Ok(FilePreviewResult {
+        content: lines.join("\n"),
+        line_count: total_lines,
+        is_truncated,
+    })
+}
+
 fn main() {
     use tauri::menu::{MenuBuilder, MenuItemBuilder};
     use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -970,7 +1027,8 @@ fn main() {
             is_maximized,
             show_native_properties,
             show_context_menu,
-            get_thumbnail
+            get_thumbnail,
+            read_file_preview
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
