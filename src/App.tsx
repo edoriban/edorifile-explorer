@@ -192,6 +192,12 @@ function App() {
             <FileList
               files={currentFiles}
               selectedPath={currentState.selectedPath}
+              sortBy={currentState.sortBy}
+              sortOrder={currentState.sortOrder}
+              onSort={(column) => {
+                const newOrder = currentState.sortBy === column && currentState.sortOrder === 'asc' ? 'desc' : 'asc';
+                useTabStore.getState().updateTabState(activeTabId, { sortBy: column, sortOrder: newOrder });
+              }}
               onSelect={handleSelect}
               onOpen={handleOpen}
               onContextMenu={handleContextMenu}

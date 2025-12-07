@@ -55,6 +55,8 @@ const createInitialTabState = (path: string): TabState => ({
     error: null,
     searchQuery: '',
     isSearching: false,
+    sortBy: 'name',
+    sortOrder: 'asc',
 });
 
 export const useTabStore = create<TabStore>((set, get) => ({

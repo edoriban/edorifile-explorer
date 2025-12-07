@@ -1,17 +1,91 @@
-import { FC } from 'react';
-import type { FileEntry } from '@types';
+import { FC, useMemo } from 'react';
+import type { FileEntry, SortBy, SortOrder } from '@types';
 import { getFileIcon } from '@utils/icons';
 import { formatSize, getFileType } from '@utils/format';
 
 interface FileListProps {
     files: FileEntry[];
     selectedPath: string | null;
+    sortBy: SortBy;
+    sortOrder: SortOrder;
+    onSort: (column: SortBy) => void;
     onSelect: (file: FileEntry) => void;
     onOpen: (file: FileEntry) => void;
     onContextMenu: (e: React.MouseEvent, file: FileEntry) => void;
 }
 
-export const FileList: FC<FileListProps> = ({ files, selectedPath, onSelect, onOpen, onContextMenu }) => {
+// Flecha indicadora de ordenación
+const SortArrow: FC<{ direction: SortOrder }> = ({ direction }) => (
+    <svg
+        width="10"
+        height="10"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        className="ml-1 opacity-70"
+    >
+        <path d={direction === 'asc' ? 'M7 14l5-5 5 5H7z' : 'M7 10l5 5 5-5H7z'} />
+    </svg>
+);
+
+// Header de columna clickeable
+const ColumnHeader: FC<{
+    label: string;
+    column: SortBy;
+    currentSort: SortBy;
+    sortOrder: SortOrder;
+    onClick: () => void;
+    className?: string;
+}> = ({ label, column, currentSort, sortOrder, onClick, className = '' }) => {
+    const isActive = currentSort === column;
+
+    return (
+        <button
+            onClick={onClick}
+            className={`flex items-center text-left hover:text-[var(--color-text-primary)] transition-colors cursor-pointer select-none ${className} ${isActive ? 'text-[var(--color-text-primary)]' : ''}`}
+        >
+            {label}
+            {isActive && <SortArrow direction={sortOrder} />}
+        </button>
+    );
+};
+
+export const FileList: FC<FileListProps> = ({
+    files,
+    selectedPath,
+    sortBy,
+    sortOrder,
+    onSort,
+    onSelect,
+    onOpen,
+    onContextMenu
+}) => {
+    // Ordenar archivos con memoización para evitar re-ordenar innecesariamente
+    const sortedFiles = useMemo(() => {
+        return [...files].sort((a, b) => {
+            // Carpetas siempre primero
+            if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1;
+
+            let comparison = 0;
+            switch (sortBy) {
+                case 'name':
+                    comparison = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+                    break;
+                case 'date':
+                    comparison = (a.modified || '').localeCompare(b.modified || '');
+                    break;
+                case 'size':
+                    comparison = a.size - b.size;
+                    break;
+                case 'type':
+                    const typeA = getFileType(a.extension, a.is_dir);
+                    const typeB = getFileType(b.extension, b.is_dir);
+                    comparison = typeA.localeCompare(typeB);
+                    break;
+            }
+            return sortOrder === 'asc' ? comparison : -comparison;
+        });
+    }, [files, sortBy, sortOrder]);
+
     if (files.length === 0) {
         return (
             <div className="flex-1 flex items-center justify-center text-[var(--color-text-muted)]">
@@ -27,17 +101,43 @@ export const FileList: FC<FileListProps> = ({ files, selectedPath, onSelect, onO
 
     return (
         <div className="flex-1 overflow-y-auto">
-            {/* Header */}
+            {/* Header con columnas clickeables */}
             <div className="sticky top-0 z-10 grid grid-cols-[1fr_150px_150px_100px] gap-4 px-6 py-2 bg-[var(--color-bg-surface)] border-b border-[var(--color-border)] text-[11px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider">
-                <div className="pl-8">Name</div>
-                <div>Modified</div>
-                <div>Type</div>
-                <div className="text-right pr-2">Size</div>
+                <ColumnHeader
+                    label="Name"
+                    column="name"
+                    currentSort={sortBy}
+                    sortOrder={sortOrder}
+                    onClick={() => onSort('name')}
+                    className="pl-8"
+                />
+                <ColumnHeader
+                    label="Modified"
+                    column="date"
+                    currentSort={sortBy}
+                    sortOrder={sortOrder}
+                    onClick={() => onSort('date')}
+                />
+                <ColumnHeader
+                    label="Type"
+                    column="type"
+                    currentSort={sortBy}
+                    sortOrder={sortOrder}
+                    onClick={() => onSort('type')}
+                />
+                <ColumnHeader
+                    label="Size"
+                    column="size"
+                    currentSort={sortBy}
+                    sortOrder={sortOrder}
+                    onClick={() => onSort('size')}
+                    className="justify-end pr-2"
+                />
             </div>
 
             {/* Rows */}
             <div>
-                {files.map((file) => {
+                {sortedFiles.map((file) => {
                     const isSelected = selectedPath === file.path;
                     return (
                         <button

@@ -1,5 +1,7 @@
 // Types for tab management
 
+import type { SortBy, SortOrder } from './file.types';
+
 export interface Tab {
     id: string;
     path: string;
@@ -16,4 +18,6 @@ export interface TabState {
     error: string | null;
     searchQuery: string;
     isSearching: boolean;
+    sortBy: SortBy;
+    sortOrder: SortOrder;
 }
