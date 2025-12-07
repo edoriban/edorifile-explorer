@@ -93,7 +93,7 @@ export const Sidebar: FC<SidebarProps> = ({ drives, quickAccess, currentPath, on
 
                     {/* OneDrive folders (expandable) */}
                     {oneDrives.map((cloud) => {
-                        const isActive = currentPath.toLowerCase().startsWith(cloud.path.toLowerCase());
+                        const isActive = currentPath.toLowerCase() === cloud.path.toLowerCase();
                         return (
                             <TreeItem
                                 key={cloud.path}
@@ -143,7 +143,7 @@ export const Sidebar: FC<SidebarProps> = ({ drives, quickAccess, currentPath, on
                 <div className="py-1 px-2">
                     <nav className="space-y-0.5">
                         {iCloudDrives.map((cloud) => {
-                            const isActive = currentPath.toLowerCase().startsWith(cloud.path.toLowerCase());
+                            const isActive = currentPath.toLowerCase() === cloud.path.toLowerCase();
                             return (
                                 <TreeItem
                                     key={cloud.path}
@@ -184,7 +184,7 @@ export const Sidebar: FC<SidebarProps> = ({ drives, quickAccess, currentPath, on
                     <nav className="space-y-0.5">
                         {drives.map((drive) => {
                             const letter = drive.path.charAt(0);
-                            const isActive = currentPath.toLowerCase().startsWith(drive.path.toLowerCase());
+                            const isActive = currentPath.toLowerCase() === drive.path.toLowerCase();
                             return (
                                 <TreeItem
                                     key={drive.path}
