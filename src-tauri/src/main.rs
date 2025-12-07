@@ -875,14 +875,76 @@ async fn get_thumbnail(path: String, size: Option<u32>) -> Result<String, String
 }
 
 fn main() {
-    use tauri::Emitter;
+    use tauri::menu::{MenuBuilder, MenuItemBuilder};
+    use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+    use tauri::{Emitter, Manager, WindowEvent};
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .setup(|app| {
+            // Create tray menu
+            let show_item = MenuItemBuilder::with_id("show", "Show EdoriFile")
+                .build(app)
+                .expect("failed to build show menu item");
+            let quit_item = MenuItemBuilder::with_id("quit", "Exit")
+                .build(app)
+                .expect("failed to build quit menu item");
+
+            let tray_menu = MenuBuilder::new(app)
+                .item(&show_item)
+                .separator()
+                .item(&quit_item)
+                .build()
+                .expect("failed to build tray menu");
+
+            // Create tray icon
+            let _tray = TrayIconBuilder::new()
+                .menu(&tray_menu)
+                .tooltip("EdoriFile Explorer")
+                .icon(app.default_window_icon().unwrap().clone())
+                .on_menu_event(|app, event| match event.id().as_ref() {
+                    "show" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                    "quit" => {
+                        app.exit(0);
+                    }
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    // Double-click or left-click to show window
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        let app = tray.app_handle();
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                })
+                .build(app)
+                .expect("failed to build tray icon");
+
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            // Minimize to tray on close request
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                let _ = window.hide();
+                api.prevent_close();
+            }
+        })
         .on_menu_event(|app, event| {
-            // Handle menu item clicks - emit to frontend
+            // Handle context menu item clicks - emit to frontend
             let action_id = event.id().0.as_str();
             println!("[ContextMenu] Menu action clicked: {}", action_id);
             let _ = app.emit("context-menu-action", action_id);

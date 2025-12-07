@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import './App.css';
 
 // Stores
-import { useAppStore, useTabStore, useClipboardStore } from '@store';
+import { useAppStore, useTabStore, useClipboardStore, useFolderPrefsStore } from '@store';
 
 // Hooks
 import { useFileOperations, useKeyboardShortcuts, useContextMenu, type DialogType } from '@hooks';
@@ -27,7 +27,15 @@ function App() {
   const [dialog, setDialog] = useState<DialogType>(null);
 
   // App store
-  const { drives, quickAccess, viewMode, setViewMode, initialize } = useAppStore();
+  const { drives, quickAccess, initialize } = useAppStore();
+
+  // Folder preferences store
+  const { getPrefs, setViewMode: saveFolderViewMode } = useFolderPrefsStore();
+
+  // Get viewMode from folder prefs or default to 'grid'
+  const currentPath = useTabStore((s) => s.getCurrentState().path);
+  const folderPrefs = getPrefs(currentPath);
+  const viewMode = folderPrefs?.viewMode || 'grid';
 
   // Tab store
   const {
@@ -125,7 +133,7 @@ function App() {
         onUp={goUp}
         onRefresh={refresh}
         onNavigate={navigateTo}
-        onViewModeChange={setViewMode}
+        onViewModeChange={(mode) => saveFolderViewMode(currentState.path, mode)}
         onSearchChange={searchFiles}
         onNewFolder={() => setDialog('newFolder')}
         onCut={handleCut}
