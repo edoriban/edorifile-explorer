@@ -1,5 +1,6 @@
 // Hook for file operations
 // Encapsulates copy, cut, paste, create folder, rename, delete operations
+// Supports multi-selection with Shift+Click and Ctrl+Click
 
 import { useCallback } from 'react';
 import { fileService, systemService } from '@services';
@@ -15,32 +16,36 @@ interface FileOperationsReturn {
     handleNewFolder: (name: string) => Promise<void>;
     handleRename: (newName: string) => Promise<void>;
     handleDelete: () => Promise<void>;
-    handleSelect: (file: FileEntry) => void;
+    handleSelect: (file: FileEntry, event: React.MouseEvent) => void;
     handleOpen: (file: FileEntry) => Promise<void>;
+    handleSelectAll: () => void;
     goUp: () => Promise<void>;
 }
 
 export function useFileOperations(): FileOperationsReturn {
-    const { activeTabId, setSelectedPath, updateTabState, navigateTo } = useTabStore();
+    const { activeTabId, setSelectedPaths, clearSelection, updateTabState, navigateTo } = useTabStore();
     const { copy, cut, clear } = useClipboardStore();
 
-    const handleCopy = useCallback(() => {
+    // Get selected files from current state
+    const getSelectedFiles = useCallback(() => {
         const currentState = useTabStore.getState().getCurrentState();
         const files = useTabStore.getState().getCurrentFiles();
-        const selectedFile = files.find(f => f.path === currentState.selectedPath);
-        if (selectedFile) {
-            copy([selectedFile]);
+        return files.filter(f => currentState.selectedPaths.includes(f.path));
+    }, []);
+
+    const handleCopy = useCallback(() => {
+        const selectedFiles = getSelectedFiles();
+        if (selectedFiles.length > 0) {
+            copy(selectedFiles);
         }
-    }, [copy]);
+    }, [copy, getSelectedFiles]);
 
     const handleCut = useCallback(() => {
-        const currentState = useTabStore.getState().getCurrentState();
-        const files = useTabStore.getState().getCurrentFiles();
-        const selectedFile = files.find(f => f.path === currentState.selectedPath);
-        if (selectedFile) {
-            cut([selectedFile]);
+        const selectedFiles = getSelectedFiles();
+        if (selectedFiles.length > 0) {
+            cut(selectedFiles);
         }
-    }, [cut]);
+    }, [cut, getSelectedFiles]);
 
     const handlePaste = useCallback(async () => {
         const currentState = useTabStore.getState().getCurrentState();
@@ -77,38 +82,77 @@ export function useFileOperations(): FileOperationsReturn {
     }, [activeTabId, updateTabState]);
 
     const handleRename = useCallback(async (newName: string) => {
-        const currentState = useTabStore.getState().getCurrentState();
-        const files = useTabStore.getState().getCurrentFiles();
-        const selectedFile = files.find(f => f.path === currentState.selectedPath);
-        if (!selectedFile) return;
+        const selectedFiles = getSelectedFiles();
+        if (selectedFiles.length !== 1) return; // Can only rename one file at a time
 
+        const selectedFile = selectedFiles[0];
         try {
             await fileService.renameItem(selectedFile.path, newName);
             useTabStore.getState().refresh();
-            setSelectedPath(activeTabId, null);
+            clearSelection(activeTabId);
         } catch (error) {
             updateTabState(activeTabId, { error: String(error) });
         }
-    }, [activeTabId, setSelectedPath, updateTabState]);
+    }, [activeTabId, clearSelection, updateTabState, getSelectedFiles]);
 
     const handleDelete = useCallback(async () => {
-        const currentState = useTabStore.getState().getCurrentState();
-        const files = useTabStore.getState().getCurrentFiles();
-        const selectedFile = files.find(f => f.path === currentState.selectedPath);
-        if (!selectedFile) return;
+        const selectedFiles = getSelectedFiles();
+        if (selectedFiles.length === 0) return;
 
         try {
-            await fileService.deleteItem(selectedFile.path);
+            // Delete all selected files
+            for (const file of selectedFiles) {
+                await fileService.deleteItem(file.path);
+            }
             useTabStore.getState().refresh();
-            setSelectedPath(activeTabId, null);
+            clearSelection(activeTabId);
         } catch (error) {
             updateTabState(activeTabId, { error: String(error) });
         }
-    }, [activeTabId, setSelectedPath, updateTabState]);
+    }, [activeTabId, clearSelection, updateTabState, getSelectedFiles]);
 
-    const handleSelect = useCallback((file: FileEntry) => {
-        setSelectedPath(activeTabId, file.path);
-    }, [activeTabId, setSelectedPath]);
+    const handleSelect = useCallback((file: FileEntry, event: React.MouseEvent) => {
+        const currentState = useTabStore.getState().getCurrentState();
+        const files = useTabStore.getState().getCurrentFiles();
+        const { selectedPaths, lastSelectedPath } = currentState;
+
+        if (event.shiftKey && lastSelectedPath) {
+            // Shift+Click: Range selection
+            const lastIndex = files.findIndex(f => f.path === lastSelectedPath);
+            const currentIndex = files.findIndex(f => f.path === file.path);
+
+            if (lastIndex !== -1 && currentIndex !== -1) {
+                const start = Math.min(lastIndex, currentIndex);
+                const end = Math.max(lastIndex, currentIndex);
+                const rangePaths = files.slice(start, end + 1).map(f => f.path);
+
+                // Combine with existing selection if Ctrl is also held
+                if (event.ctrlKey || event.metaKey) {
+                    const combined = [...new Set([...selectedPaths, ...rangePaths])];
+                    setSelectedPaths(activeTabId, combined, file.path);
+                } else {
+                    setSelectedPaths(activeTabId, rangePaths, file.path);
+                }
+            }
+        } else if (event.ctrlKey || event.metaKey) {
+            // Ctrl+Click: Toggle selection
+            if (selectedPaths.includes(file.path)) {
+                const newPaths = selectedPaths.filter(p => p !== file.path);
+                setSelectedPaths(activeTabId, newPaths, newPaths.length > 0 ? file.path : undefined);
+            } else {
+                setSelectedPaths(activeTabId, [...selectedPaths, file.path], file.path);
+            }
+        } else {
+            // Normal click: Single selection
+            setSelectedPaths(activeTabId, [file.path], file.path);
+        }
+    }, [activeTabId, setSelectedPaths]);
+
+    const handleSelectAll = useCallback(() => {
+        const files = useTabStore.getState().getCurrentFiles();
+        const allPaths = files.map(f => f.path);
+        setSelectedPaths(activeTabId, allPaths, allPaths.length > 0 ? allPaths[allPaths.length - 1] : undefined);
+    }, [activeTabId, setSelectedPaths]);
 
     const handleOpen = useCallback(async (file: FileEntry) => {
         if (file.is_dir) {
@@ -145,6 +189,7 @@ export function useFileOperations(): FileOperationsReturn {
         handleDelete,
         handleSelect,
         handleOpen,
+        handleSelectAll,
         goUp,
     };
 }

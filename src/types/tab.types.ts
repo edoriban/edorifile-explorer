@@ -13,7 +13,8 @@ export interface TabState {
     title: string;
     history: string[];
     historyIndex: number;
-    selectedPath: string | null;
+    selectedPaths: string[];
+    lastSelectedPath: string | null; // For Shift+Click range selection
     isLoading: boolean;
     error: string | null;
     searchQuery: string;

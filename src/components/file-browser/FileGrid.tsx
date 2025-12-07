@@ -1,5 +1,6 @@
 // FileGrid component - displays files in a grid layout with thumbnails
 // Using Thumbnail component for image previews
+// Supports multi-selection with selectedPaths array
 
 import { FC } from 'react';
 import type { FileEntry } from '@types';
@@ -7,13 +8,13 @@ import { Thumbnail } from './Thumbnail';
 
 interface FileGridProps {
     files: FileEntry[];
-    selectedPath: string | null;
-    onSelect: (file: FileEntry) => void;
+    selectedPaths: string[];
+    onSelect: (file: FileEntry, event: React.MouseEvent) => void;
     onOpen: (file: FileEntry) => void;
     onContextMenu: (e: React.MouseEvent, file: FileEntry) => void;
 }
 
-export const FileGrid: FC<FileGridProps> = ({ files, selectedPath, onSelect, onOpen, onContextMenu }) => {
+export const FileGrid: FC<FileGridProps> = ({ files, selectedPaths, onSelect, onOpen, onContextMenu }) => {
     if (files.length === 0) {
         return (
             <div className="flex-1 flex items-center justify-center text-[var(--color-text-muted)]">
@@ -31,11 +32,11 @@ export const FileGrid: FC<FileGridProps> = ({ files, selectedPath, onSelect, onO
         <div className="flex-1 overflow-y-auto p-4">
             <div className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-2">
                 {files.map((file) => {
-                    const isSelected = selectedPath === file.path;
+                    const isSelected = selectedPaths.includes(file.path);
                     return (
                         <button
                             key={file.path}
-                            onClick={() => onSelect(file)}
+                            onClick={(e) => onSelect(file, e)}
                             onDoubleClick={() => onOpen(file)}
                             onContextMenu={(e) => onContextMenu(e, file)}
                             className={`file-item flex flex-col items-center p-3 rounded-[var(--radius-lg)] transition-all duration-100 cursor-pointer group

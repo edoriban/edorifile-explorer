@@ -21,7 +21,7 @@ interface ContextMenuReturn {
 export function useContextMenu({ setDialog }: ContextMenuOptions): ContextMenuReturn {
     const contextFileRef = useRef<FileEntry | null>(null);
     const { handleOpen, handleCut, handleCopy, handlePaste } = useFileOperations();
-    const { activeTabId, setSelectedPath, getCurrentState } = useTabStore();
+    const { activeTabId, setSelectedPaths, getCurrentState } = useTabStore();
     const hasClipboard = useClipboardStore((s) => s.clipboard !== null);
 
     // Handle right-click on file
@@ -29,7 +29,7 @@ export function useContextMenu({ setDialog }: ContextMenuOptions): ContextMenuRe
         e.preventDefault();
         e.stopPropagation();
 
-        setSelectedPath(activeTabId, file.path);
+        setSelectedPaths(activeTabId, [file.path], file.path);
         contextFileRef.current = file;
 
         try {
@@ -43,7 +43,7 @@ export function useContextMenu({ setDialog }: ContextMenuOptions): ContextMenuRe
         } catch (error) {
             console.error('Failed to show context menu:', error);
         }
-    }, [activeTabId, setSelectedPath, hasClipboard]);
+    }, [activeTabId, setSelectedPaths, hasClipboard]);
 
     // Handle right-click on background
     const handleBackgroundContextMenu = useCallback(async (e: React.MouseEvent) => {

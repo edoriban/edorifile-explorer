@@ -34,10 +34,10 @@ export function useKeyboardShortcuts({
             if (e.ctrlKey) {
                 switch (e.key.toLowerCase()) {
                     case 'c':
-                        if (currentState.selectedPath) handleCopy();
+                        if (currentState.selectedPaths.length > 0) handleCopy();
                         break;
                     case 'x':
-                        if (currentState.selectedPath) handleCut();
+                        if (currentState.selectedPaths.length > 0) handleCut();
                         break;
                     case 'v':
                         if (clipboard) handlePaste();
@@ -60,10 +60,10 @@ export function useKeyboardShortcuts({
             } else {
                 switch (e.key) {
                     case 'Delete':
-                        if (currentState.selectedPath) setDialog('delete');
+                        if (currentState.selectedPaths.length > 0) setDialog('delete');
                         break;
                     case 'F2':
-                        if (currentState.selectedPath) setDialog('rename');
+                        if (currentState.selectedPaths.length === 1) setDialog('rename');
                         break;
                     case 'F5':
                         refresh();

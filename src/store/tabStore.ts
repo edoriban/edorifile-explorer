@@ -23,7 +23,8 @@ interface TabStore {
     // Tab state updates
     updateTabState: (tabId: string, updates: Partial<TabState>) => void;
     setFiles: (tabId: string, files: FileEntry[]) => void;
-    setSelectedPath: (tabId: string, path: string | null) => void;
+    setSelectedPaths: (tabId: string, paths: string[], lastPath?: string) => void;
+    clearSelection: (tabId: string) => void;
 
     // Navigation
     navigateTo: (path: string, replaceHistory?: boolean) => void;
@@ -50,7 +51,8 @@ const createInitialTabState = (path: string): TabState => ({
     title: path.split('\\').filter(Boolean).pop() || path,
     history: [path],
     historyIndex: 0,
-    selectedPath: null,
+    selectedPaths: [],
+    lastSelectedPath: null,
     isLoading: false,
     error: null,
     searchQuery: '',
@@ -143,8 +145,15 @@ export const useTabStore = create<TabStore>((set, get) => ({
         }));
     },
 
-    setSelectedPath: (tabId, path) => {
-        get().updateTabState(tabId, { selectedPath: path });
+    setSelectedPaths: (tabId, paths, lastPath) => {
+        get().updateTabState(tabId, {
+            selectedPaths: paths,
+            lastSelectedPath: lastPath ?? (paths.length > 0 ? paths[paths.length - 1] : null)
+        });
+    },
+
+    clearSelection: (tabId) => {
+        get().updateTabState(tabId, { selectedPaths: [], lastSelectedPath: null });
     },
 
     // Navigation
@@ -247,7 +256,7 @@ export const useTabStore = create<TabStore>((set, get) => ({
         try {
             const entries = await fileService.readDirectory(path);
             get().setFiles(tabId, entries);
-            get().updateTabState(tabId, { selectedPath: null, isLoading: false });
+            get().updateTabState(tabId, { selectedPaths: [], lastSelectedPath: null, isLoading: false });
         } catch (error) {
             get().updateTabState(tabId, {
                 error: String(error),

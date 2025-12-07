@@ -1,20 +1,24 @@
-import { FC, useMemo } from 'react';
+import { FC, useMemo, useRef } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import type { FileEntry, SortBy, SortOrder } from '@types';
 import { getFileIcon } from '@utils/icons';
 import { formatSize, getFileType } from '@utils/format';
 
 interface FileListProps {
     files: FileEntry[];
-    selectedPath: string | null;
+    selectedPaths: string[];
     sortBy: SortBy;
     sortOrder: SortOrder;
     onSort: (column: SortBy) => void;
-    onSelect: (file: FileEntry) => void;
+    onSelect: (file: FileEntry, event: React.MouseEvent) => void;
     onOpen: (file: FileEntry) => void;
     onContextMenu: (e: React.MouseEvent, file: FileEntry) => void;
 }
 
-// Flecha indicadora de ordenación
+// Row height for virtualization
+const ROW_HEIGHT = 36;
+
+// Sort arrow indicator
 const SortArrow: FC<{ direction: SortOrder }> = ({ direction }) => (
     <svg
         width="10"
@@ -27,7 +31,7 @@ const SortArrow: FC<{ direction: SortOrder }> = ({ direction }) => (
     </svg>
 );
 
-// Header de columna clickeable
+// Clickable column header
 const ColumnHeader: FC<{
     label: string;
     column: SortBy;
@@ -49,9 +53,56 @@ const ColumnHeader: FC<{
     );
 };
 
+// Individual file row component
+const FileRow: FC<{
+    file: FileEntry;
+    isSelected: boolean;
+    style: React.CSSProperties;
+    onSelect: (file: FileEntry, event: React.MouseEvent) => void;
+    onOpen: (file: FileEntry) => void;
+    onContextMenu: (e: React.MouseEvent, file: FileEntry) => void;
+}> = ({ file, isSelected, style, onSelect, onOpen, onContextMenu }) => (
+    <button
+        style={style}
+        onClick={(e) => onSelect(file, e)}
+        onDoubleClick={() => onOpen(file)}
+        onContextMenu={(e) => onContextMenu(e, file)}
+        className={`file-row absolute left-0 right-0 grid grid-cols-[1fr_150px_150px_100px] gap-4 px-6 items-center text-left transition-colors
+            ${isSelected ? 'selected bg-[var(--color-bg-selected-row)]' : 'hover:bg-[var(--color-bg-hover)]'}`}
+    >
+        {/* Name with icon */}
+        <div className="flex items-center gap-3 min-w-0 pl-1">
+            <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
+                {getFileIcon(file.extension, file.is_dir, 20)}
+            </div>
+            <span
+                className={`truncate text-[13px] ${isSelected ? 'text-[var(--color-accent)]' : ''}`}
+                title={file.name}
+            >
+                {file.name}
+            </span>
+        </div>
+
+        {/* Modified */}
+        <div className="text-[12px] text-[var(--color-text-secondary)]">
+            {file.modified || '-'}
+        </div>
+
+        {/* Type */}
+        <div className="text-[12px] text-[var(--color-text-secondary)] truncate">
+            {getFileType(file.extension, file.is_dir)}
+        </div>
+
+        {/* Size */}
+        <div className="text-[12px] text-[var(--color-text-secondary)] text-right pr-2">
+            {file.is_dir ? '-' : formatSize(file.size)}
+        </div>
+    </button>
+);
+
 export const FileList: FC<FileListProps> = ({
     files,
-    selectedPath,
+    selectedPaths,
     sortBy,
     sortOrder,
     onSort,
@@ -59,10 +110,13 @@ export const FileList: FC<FileListProps> = ({
     onOpen,
     onContextMenu
 }) => {
-    // Ordenar archivos con memoización para evitar re-ordenar innecesariamente
+    // Ref for the scrollable container
+    const parentRef = useRef<HTMLDivElement>(null);
+
+    // Sort files with memoization
     const sortedFiles = useMemo(() => {
         return [...files].sort((a, b) => {
-            // Carpetas siempre primero
+            // Folders always first
             if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1;
 
             let comparison = 0;
@@ -86,6 +140,14 @@ export const FileList: FC<FileListProps> = ({
         });
     }, [files, sortBy, sortOrder]);
 
+    // Virtual row rendering
+    const rowVirtualizer = useVirtualizer({
+        count: sortedFiles.length,
+        getScrollElement: () => parentRef.current,
+        estimateSize: () => ROW_HEIGHT,
+        overscan: 10, // Render 10 extra rows above/below viewport
+    });
+
     if (files.length === 0) {
         return (
             <div className="flex-1 flex items-center justify-center text-[var(--color-text-muted)]">
@@ -100,9 +162,9 @@ export const FileList: FC<FileListProps> = ({
     }
 
     return (
-        <div className="flex-1 overflow-y-auto">
-            {/* Header con columnas clickeables */}
-            <div className="sticky top-0 z-10 grid grid-cols-[1fr_150px_150px_100px] gap-4 px-6 py-2 bg-[var(--color-bg-surface)] border-b border-[var(--color-border)] text-[11px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider">
+        <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Sticky Header */}
+            <div className="flex-shrink-0 grid grid-cols-[1fr_150px_150px_100px] gap-4 px-6 py-2 bg-[var(--color-bg-surface)] border-b border-[var(--color-border)] text-[11px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider">
                 <ColumnHeader
                     label="Name"
                     column="name"
@@ -135,49 +197,38 @@ export const FileList: FC<FileListProps> = ({
                 />
             </div>
 
-            {/* Rows */}
-            <div>
-                {sortedFiles.map((file) => {
-                    const isSelected = selectedPath === file.path;
-                    return (
-                        <button
-                            key={file.path}
-                            onClick={() => onSelect(file)}
-                            onDoubleClick={() => onOpen(file)}
-                            onContextMenu={(e) => onContextMenu(e, file)}
-                            className={`file-row w-full grid grid-cols-[1fr_150px_150px_100px] gap-4 px-6 py-2 items-center text-left transition-colors
-                ${isSelected ? 'selected' : 'hover:bg-[var(--color-bg-hover)]'}`}
-                        >
-                            {/* Name with icon */}
-                            <div className="flex items-center gap-3 min-w-0 pl-1">
-                                <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
-                                    {getFileIcon(file.extension, file.is_dir, 20)}
-                                </div>
-                                <span
-                                    className={`truncate text-[13px] ${isSelected ? 'text-[var(--color-accent)]' : ''}`}
-                                    title={file.name}
-                                >
-                                    {file.name}
-                                </span>
-                            </div>
+            {/* Virtualized Rows Container */}
+            <div
+                ref={parentRef}
+                className="flex-1 overflow-auto"
+            >
+                <div
+                    style={{
+                        height: `${rowVirtualizer.getTotalSize()}px`,
+                        width: '100%',
+                        position: 'relative',
+                    }}
+                >
+                    {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                        const file = sortedFiles[virtualRow.index];
+                        const isSelected = selectedPaths.includes(file.path);
 
-                            {/* Modified */}
-                            <div className="text-[12px] text-[var(--color-text-secondary)]">
-                                {file.modified || '-'}
-                            </div>
-
-                            {/* Type */}
-                            <div className="text-[12px] text-[var(--color-text-secondary)] truncate">
-                                {getFileType(file.extension, file.is_dir)}
-                            </div>
-
-                            {/* Size */}
-                            <div className="text-[12px] text-[var(--color-text-secondary)] text-right pr-2">
-                                {file.is_dir ? '-' : formatSize(file.size)}
-                            </div>
-                        </button>
-                    );
-                })}
+                        return (
+                            <FileRow
+                                key={file.path}
+                                file={file}
+                                isSelected={isSelected}
+                                style={{
+                                    height: `${virtualRow.size}px`,
+                                    transform: `translateY(${virtualRow.start}px)`,
+                                }}
+                                onSelect={onSelect}
+                                onOpen={onOpen}
+                                onContextMenu={onContextMenu}
+                            />
+                        );
+                    })}
+                </div>
             </div>
         </div>
     );

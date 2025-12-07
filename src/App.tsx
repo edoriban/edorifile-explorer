@@ -8,7 +8,7 @@ import './App.css';
 import { useAppStore, useTabStore, useClipboardStore, useFolderPrefsStore } from '@store';
 
 // Hooks
-import { useFileOperations, useKeyboardShortcuts, useContextMenu, type DialogType } from '@hooks';
+import { useFileOperations, useKeyboardShortcuts, useKeyboardNavigation, useContextMenu, type DialogType } from '@hooks';
 
 // Components - organized by category
 import {
@@ -69,6 +69,7 @@ function App() {
     handleDelete,
     handleSelect,
     handleOpen,
+    handleSelectAll,
     goUp,
   } = useFileOperations();
 
@@ -79,6 +80,16 @@ function App() {
     setDialog,
     onNewTab: () => addTab(getCurrentState().path),
     onCloseTab: () => closeTab(activeTabId),
+  });
+
+  // Keyboard navigation for file browser
+  useKeyboardNavigation({
+    onOpen: handleOpen,
+    onGoUp: goUp,
+    onDeleteRequest: () => setDialog('delete'),
+    onRenameRequest: () => setDialog('rename'),
+    onSelectAll: handleSelectAll,
+    isDialogOpen: dialog !== null,
   });
 
   // Get current state
@@ -105,8 +116,9 @@ function App() {
     init();
   }, []);
 
-  // Get selected file from current files
-  const selectedFile = currentFiles.find(f => f.path === currentState.selectedPath) || null;
+  // Get selected files from current files
+  const selectedFiles = currentFiles.filter(f => currentState.selectedPaths.includes(f.path));
+  const selectedFile = selectedFiles.length === 1 ? selectedFiles[0] : null;
 
   return (
     <div className="h-screen flex flex-col bg-[var(--color-bg-base)]">
@@ -126,7 +138,7 @@ function App() {
         canGoForward={canGoForward()}
         viewMode={viewMode}
         searchQuery={currentState.searchQuery}
-        hasSelection={!!currentState.selectedPath}
+        hasSelection={currentState.selectedPaths.length > 0}
         hasClipboard={!!clipboard}
         onBack={goBack}
         onForward={goForward}
@@ -191,7 +203,7 @@ function App() {
           {viewMode === 'grid' ? (
             <FileGrid
               files={currentFiles}
-              selectedPath={currentState.selectedPath}
+              selectedPaths={currentState.selectedPaths}
               onSelect={handleSelect}
               onOpen={handleOpen}
               onContextMenu={handleContextMenu}
@@ -199,7 +211,7 @@ function App() {
           ) : (
             <FileList
               files={currentFiles}
-              selectedPath={currentState.selectedPath}
+              selectedPaths={currentState.selectedPaths}
               sortBy={currentState.sortBy}
               sortOrder={currentState.sortOrder}
               onSort={(column) => {
@@ -215,10 +227,12 @@ function App() {
           {/* Status bar */}
           <footer className="h-6 flex items-center px-4 bg-[var(--color-bg-base)] border-t border-[var(--color-border)] text-[11px] text-[var(--color-text-muted)]">
             <span>{currentFiles.length} items</span>
-            {selectedFile && (
+            {selectedFiles.length > 0 && (
               <>
                 <span className="mx-2">|</span>
-                <span className="truncate">{selectedFile.name}</span>
+                <span className="truncate">
+                  {selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} items selected`}
+                </span>
               </>
             )}
             {clipboard && (
